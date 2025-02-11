@@ -1,0 +1,36 @@
+[project]
+name = "gym-adr"
+version = "0.1.0"
+description = "A gymnasium environment for ADR."
+authors = [
+    {name = "Hugo de Rohan Willner",email = "hugoderohanwillner@gmail.com"},
+    {name = "Pierre Nikitits",email = "pnikitits@gmail.com"},
+    {name = "Antoine Poupon",email = "ant.poupon@gmail.com"}
+]
+license = {text = "Apache-2.0"}
+readme = "README.md"
+requires-python = ">=3.9,<3.11"
+dependencies = [
+    "poliastro (>=0.17.0,<0.18.0)",
+    "astropy (==5.2.2)",
+    "tqdm (>=4.67.1,<5.0.0)",
+    "wandb (>=0.19.7,<0.20.0)",
+    "gymnasium (>=1.0.0,<2.0.0)",
+    "panda3d (>=1.10.15,<2.0.0)",
+    "numpy (==1.24.4)",
+    "screeninfo (>=0.8.1,<0.9.0)",
+    "numba (==0.60)",
+    "stable-baselines3 (>=2.6.0,<3.0.0)",
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.9.7"
+pytest = "^8.3.4"
+pre-commit = "^4.1.0"
+debugpy = "^1.8.12"
+commitlint = "^1.3.0"

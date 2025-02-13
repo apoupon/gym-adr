@@ -103,30 +103,37 @@ class ADREnv(gym.Env):
         # Use the simulator to compute the maneuvre fuel and time and propagate
         cv, dt_min = self.simulator.simulate_action(action)
 
-        # DEBUG: Check that the otv has moved to the correct derbis
-        target_debris = self.simulator.debris_list[action].poliastro_orbit
-        otv = self.simulator.otv_orbit
-        diff = otv.r - target_debris.r
-        if np.max(diff) > 0.1 * u.km:
-            print('distance between otv and target debris: ', otv.r - target_debris.r)
-            print('time differences: ', (otv.epoch - target_debris.epoch))
+        self.action_is_legal = self.is_legal(action, cv, dt_min)
+        terminated = not self.action_is_legal
+        truncated = False # check when True or False
 
-        
-        terminated = 0
-        truncated = 0
-        reward = 0
-        observation = self._get_obs()
-        info = self._get_info()
+        reward = self.compute_reward(action)
+
+        # reset priority list after computing reward
+
+        # update state somewhere 
+
+        observation = self.get_obs()
+        info = self.get_info()
 
         return observation, reward, terminated, truncated, info
 
     def reset(self, seed=None, options=None):
-        # We need the following line to seed self.np_random #####################################
+        # We need the following line to seed self.np_random # check how np_random works
         super().reset(seed=seed)
         self._setup()
 
-        observation = self._get_obs()
-        info = self._get_info()
+        # ########
+        # it's here that we initialize our state (with values coming from the Iridium-33)
+        # from now random only
+        rs = np.random.RandomState(seed=seed) # si init des débris random
+        state = np.array([rs.randint(0,100),
+                          rs.randint(0,100)]) # to do
+        # ########
+        self._set_state(state)
+    
+        observation = self.get_obs()
+        info = self.get_info()
 
         return observation, info
 
@@ -153,14 +160,31 @@ class ADREnv(gym.Env):
                     ),
                 }
             )
-        # print(f'Observation Space : {self.observation_space}')
-        # self.observation_space['binary_flag'][self.first_debris] = 1 # OTV starts at the first debris, so we consider it as deorbited
 
-    def _get_obs(self):
+    def get_obs(self):
+        return {
+            'step_and_debris': np.array()
+        }
         pass
 
-    def _get_info(self):
-        pass
+    def _set_state(self, state):
+        self.removal_step = state[0]
+        self.number_debris_left = state[1]
+        self.current_removing_debris = state[2]
+        self.dv_left = state[3]
+        self.dt_left = state[4]
+        self.binary_flag = state[4:self.total_n_debris+4]
+        self.priority_score = state[self.total_n_debris+4:2*self.total_n_debris+4]
+
+        # Run physics to take effect
+        # self.space.step(self.dt) # to do
+
+    def get_info(self):
+        info = {}
+        if not self.action_is_legal:
+            info['is_legal'] = False
+        
+        return info
 
     def compute_reward(self, action):
         # Calculate reward using the priority list
@@ -179,8 +203,8 @@ class ADREnv(gym.Env):
         return self._render(visualize=True)
 
     def _render(self, visualize=False):
+        # do we use this function for rendering or deal with it somewhere else ?
         pass
 
     def close(self):
         pass
-

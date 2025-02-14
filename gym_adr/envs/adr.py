@@ -72,64 +72,55 @@ class ADREnv(gym.Env):
         self.random_first_debris = random_first_debris
         self.first_debris = first_debris
 
-        ###########################
-        self.fuel_uses_in_episode = [] # to log the fuel use, why is it used ?
+        #######
+        self.fuel_uses_in_episode = [] # to log the fuel use
         self.time_uses_in_episode = []
-        ###########################
+        #######
 
         if self.random_first_debris:
             self.first_debris = random.randint(0, self.total_n_debris-1)
         self.simulator = Simulator(starting_index=self.first_debris , n_debris=self.total_n_debris)
 
         self.observation_space = self._initialize_observation_space()
-        self.action_space = gym.spaces.Discrete(self.total_n_debris) # debris to deorbit (dt_max_per_transfer is not in action space anymore)
-
-        self.action_is_legal = False # check when it is used
+        self.action_space = gym.spaces.Discrete(self.total_n_debris)
 
     def step(self, action):
         if DEBUG:
             print("\n -----  ENV STEP -----")
             print('action: ', action)
 
-        if self.state.binary_flags[action[0]] == 1:
-            print('illegal binary flag') if DEBUG else None
-            observation = 0 # self.state.to_list() # think about how state should be implemented, State class ? 
-            reward = 0
-            terminated = True
-            truncated = False
-            info = {} # check what to put in info
-            return observation, reward, terminated, truncated, info
-
         # Use the simulator to compute the maneuvre fuel and time and propagate
         cv, dt_min = self.simulator.simulate_action(action)
 
-        self.action_is_legal = self.is_legal(action, cv, dt_min)
-        terminated = not self.action_is_legal
-        truncated = False # check when True or False
-
+        terminated = self.is_terminated(action, cv, dt_min)
         reward = self.compute_reward(action)
 
         # reset priority list after computing reward
+        self.priority_list = np.ones(self.total_n_debris, dtype=int)
+        priority_debris = self.get_priority()
 
-        # update state somewhere 
+        self.transition_function(action=action,
+                                 cv=cv,
+                                 dt_min=dt_min,
+                                 priority_debris=priority_debris)
 
         observation = self.get_obs()
         info = self.get_info()
 
-        return observation, reward, terminated, truncated, info
+        return observation, reward, terminated, False, info
+
 
     def reset(self, seed=None, options=None):
-        # We need the following line to seed self.np_random # check how np_random works
         super().reset(seed=seed)
-        self._setup()
+        self._setup() # à voir quand on s'occupe du rendering
 
-        # ########
-        # it's here that we initialize our state (with values coming from the Iridium-33)
-        # from now random only
-        rs = np.random.RandomState(seed=seed) # si init des débris random
-        state = np.array([rs.randint(0,100),
-                          rs.randint(0,100)]) # to do
-        # ########
+        # initialize state
+        state = np.concatenate([
+            np.array([0, self.total_n_debris, self.first_debris, self.dv_max_per_mission, self.dt_max_per_mission]),
+            np.zeros(self.total_n_debris, dtype=int),
+            np.zeros(self.total_n_debris, dtype=int),
+        ])
+        state[4+self.first_debris] = 1
         self._set_state(state)
     
         observation = self.get_obs()
@@ -151,11 +142,11 @@ class ADREnv(gym.Env):
                         dtype=np.float64,
                     ),
                     # [binary_flag_debris1, binary_flag_debris2...]
-                    "binary_flag": gym.spaces.MultiBinary(
+                    "binary_flags": gym.spaces.MultiBinary(
                         self.total_n_debris
                     ),
                     # [priority_score_debris1, priority_score_debris2...]
-                    "priority_score": gym.spaces.MultiBinary(
+                    "priority_scores": gym.spaces.MultiBinary(
                         self.total_n_debris,
                     ),
                 }
@@ -163,9 +154,11 @@ class ADREnv(gym.Env):
 
     def get_obs(self):
         return {
-            'step_and_debris': np.array()
+            'step_and_debris': np.array([self.removal_step, self.number_debris_left, self.current_removing_debris]),
+            'fuel_time_constraints': np.array([self.dv_left, self.dt_left]),
+            'binary_flags': np.array(self.binary_flags),
+            'priority_scores': np.array(self.priority_scores)
         }
-        pass
 
     def _set_state(self, state):
         self.removal_step = state[0]
@@ -173,16 +166,16 @@ class ADREnv(gym.Env):
         self.current_removing_debris = state[2]
         self.dv_left = state[3]
         self.dt_left = state[4]
-        self.binary_flag = state[4:self.total_n_debris+4]
-        self.priority_score = state[self.total_n_debris+4:2*self.total_n_debris+4]
+        self.binary_flags = state[4:self.total_n_debris+4]
+        self.priority_scores = state[self.total_n_debris+4:2*self.total_n_debris+4]
 
-        # Run physics to take effect
-        # self.space.step(self.dt) # to do
+        # render first frame
+
 
     def get_info(self):
         info = {}
-        if not self.action_is_legal:
-            info['is_legal'] = False
+        
+        # store dataframe in info ? (rendering)
         
         return info
 
@@ -191,10 +184,92 @@ class ADREnv(gym.Env):
         reward = self.state.priority_list[action]
 
         # Set reward to 0 if the action is not legal
-        if not self.action_is_legal:
+        if self.terminated:
             reward = 0
         
         return reward
+
+    def is_terminated(self,
+                      action,
+                      cv,
+                      dt_min):
+        # input is state before transition
+        next_debris_index = action
+
+        # à réécrire pour avoir la fonction qui tient en 3 lignes
+
+        """
+        Max time
+        check if next_state_t_left > 0:
+        tr2 = True
+        """
+        tr2 = False
+        if (self.dt_left - dt_min) > 0:
+            tr2 = True
+
+        """
+        if debris is available (binary flag == 0)
+        tr3 = True
+        """
+        tr3 = False
+        if self.binary_flags[next_debris_index] == 0:
+            tr3 = True
+
+        """
+        Max dv (fuel)
+        check if next_state_dv_left > 0
+        tr4 = True
+        """
+        tr4 = False
+        if (self.dv_left * (u.km/u.s) - cv) > 0:
+            tr4 = True
+        
+        #######
+        if DEBUG:
+            self.debug_list = [tr2, tr3, tr4]
+
+            if (tr2 and tr3 and tr4):
+                self.fuel_uses_in_episode.append(cv.to(u.m/u.s).value)
+                self.time_uses_in_episode.append(dt_min.to(u.s).value)
+        #######
+
+        return not (tr2 and tr3 and tr4)
+
+    def transition_function(self,
+                            action,
+                            cv,
+                            dt_min,
+                            priority_debris
+                            ):
+        self.removal_step += 1
+        self.number_debris_left -= 1
+        self.dt_left -= dt_min.to(u.day).value
+        self.dv_left -= cv.to(u.km/u.s).value
+
+        # Update current removing debris after computing CB
+        self.current_removing_debris = action
+        self.binary_flags[self.current_removing_debris] = 1
+
+        # Add a higher priority to the selected debris
+        if priority_debris and self.priority_is_on:
+            self.priority_list[priority_debris] = 10
+
+
+    def get_priority(self):
+        '''
+            Returns a random debris index to set as priority
+            Taken from the available debris that have not been removed yet
+        '''
+        priority_debris = None
+
+        # Get the list of indices where the binary flag is 0
+        available_debris = [i for i, flag in enumerate(self.binary_flags) if flag == 0]
+
+        if random.random() < 0.3:
+            # Randomly select a debris from the available list
+            priority_debris = random.choice(available_debris)
+
+        return priority_debris
 
     def _setup(self):
         pass

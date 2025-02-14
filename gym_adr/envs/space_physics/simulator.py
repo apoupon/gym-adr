@@ -47,7 +47,7 @@ class Simulator:
         Input:
             action : (next_debris_norad_id , dt_given)
         Output:
-            DV_required , DT_required
+            DV_required, DT_required
 
         Can expand to testing multiple strategies
         Updates all objects in simulator
@@ -57,7 +57,7 @@ class Simulator:
         return DV_required , DT_required
 
 
-    def strategy_1(self , action, render=False, step_sec=5):
+    def strategy_1(self, action, render=False, step_sec=5):
         """
         Strategy 1 defined in transfer strategies slides
         1. Inc
@@ -66,7 +66,7 @@ class Simulator:
         """
 
         # Set the target from the action
-        target_debris = self.debris_list[action[0]].poliastro_orbit
+        target_debris = self.debris_list[action].poliastro_orbit
 
         # ---- Inclination change
         inc_change = custom_maneuvres.simple_inc_change(self.otv_orbit, target_debris)
@@ -77,7 +77,8 @@ class Simulator:
         # Apply the maneuver to the otv
         self.otv_orbit, inc_frames = self.otv_orbit.apply_maneuver_custom(inc_change, copy.deepcopy(self.debris_list) if render else None, step_sec=step_sec, render=render)
         # Append the current fuel to the frames df
-        inc_frames['fuel'] = self.current_fuel if render else None
+        if render:
+            inc_frames['fuel'] = self.current_fuel
         self.current_fuel -= inc_change.get_total_cost().value
 
         # Propagate all debris to the end of the transfer
@@ -86,7 +87,7 @@ class Simulator:
         
 
         # ---- Raan change
-        target_debris = self.debris_list[action[0]].poliastro_orbit
+        target_debris = self.debris_list[action].poliastro_orbit
         raan_change = custom_maneuvres.simple_raan_change(self.otv_orbit, target_debris)
 
         # Get the transfer time of the hoh_phas
@@ -95,7 +96,8 @@ class Simulator:
         # Apply the maneuver to the otv
         self.otv_orbit, raan_frames = self.otv_orbit.apply_maneuver_custom(raan_change, copy.deepcopy(self.debris_list) if render else None, step_sec=step_sec, render=render)
         # Append the current fuel to the frames df
-        raan_frames['fuel'] = self.current_fuel if render else None
+        if render:
+            raan_frames['fuel'] = self.current_fuel
         self.current_fuel -= inc_change.get_total_cost().value
 
         # Propagate all debris to the end of the transfer
@@ -104,7 +106,7 @@ class Simulator:
         
 
         # ---- Hohmann
-        target_debris = self.debris_list[action[0]].poliastro_orbit
+        target_debris = self.debris_list[action].poliastro_orbit
         hoh_change = custom_maneuvres.hohmann_with_phasing(self.otv_orbit, target_debris)
 
         # Get the transfer time of the hoh_phas
@@ -113,7 +115,8 @@ class Simulator:
         # Apply the maneuver to the otv
         self.otv_orbit, hoh_frames = self.otv_orbit.apply_maneuver_custom(hoh_change, copy.deepcopy(self.debris_list) if render else None, step_sec=step_sec, render=render)
         # Append the current fuel to the frames df
-        hoh_frames['fuel'] = self.current_fuel if render else None
+        if render:
+            hoh_frames['fuel'] = self.current_fuel
         self.current_fuel -= inc_change.get_total_cost().value
 
         # Propagate all debris to the end of the transfer
@@ -126,7 +129,7 @@ class Simulator:
 
 
         # Propagate with the extra time after the action
-        extra_time = action[1] * u.day - min_time      #### to delete ?
+        # extra_time = action * u.day - min_time
         # print(extra_time)
         # if extra_time.value > 0:
         #     self.otv_orbit = self.otv_orbit.propagate(extra_time)
@@ -137,7 +140,7 @@ class Simulator:
             # Concat the dataframes
             location_frames_df = pd.concat([inc_frames , raan_frames , hoh_frames] , axis=0)
             # Add a column for the action
-            location_frames_df['target_index'] = action[0]
+            location_frames_df['target_index'] = action
             return location_frames_df
         else:
             return total_dv , min_time

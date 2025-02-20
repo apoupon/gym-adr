@@ -127,15 +127,6 @@ class Simulator:
         total_dv = hoh_change.get_total_cost() + raan_change.get_total_cost() + inc_change.get_total_cost()
         min_time = hoh_change.get_total_time() + raan_change.get_total_time() + inc_change.get_total_time()
 
-
-        # Propagate with the extra time after the action
-        # extra_time = action * u.day - min_time
-        # print(extra_time)
-        # if extra_time.value > 0:
-        #     self.otv_orbit = self.otv_orbit.propagate(extra_time)
-        #     for i , debris in enumerate(self.debris_list):
-        #         self.debris_list[i].poliastro_orbit = debris.poliastro_orbit.propagate(extra_time)
-
         if render:
             # Concat the dataframes
             location_frames_df = pd.concat([inc_frames , raan_frames , hoh_frames] , axis=0)

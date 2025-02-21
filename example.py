@@ -1,4 +1,4 @@
-import gymnasium as gym
+# import gymnasium as gym
 from gym_adr.envs.adr import ADREnv # import gym_adr
 
 if __name__ == "__main__":

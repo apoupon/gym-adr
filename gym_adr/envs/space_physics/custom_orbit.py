@@ -1,5 +1,4 @@
 from functools import cached_property
-from typing import List, Union
 from warnings import warn
 import pandas as pd
 import copy
@@ -7,29 +6,28 @@ import copy
 import numpy as np
 from astropy import time, units as u
 from astropy.coordinates import (
-    ICRS,
     CartesianDifferential,
     CartesianRepresentation,
-    get_body_barycentric,
 )
 
 from tqdm import tqdm
 from poliastro.bodies import Earth
 from poliastro.core.events import elevation_function as elevation_function_fast
 from poliastro.frames.util import get_frame
+
 # from poliastro.threebody.soi import laplace_radius
 from poliastro.twobody.elements import eccentricity_vector, energy, t_p
 from poliastro.twobody.orbit.creation import OrbitCreationMixin
 from poliastro.twobody.propagation import FarnocchiaPropagator, PropagatorKind
 from poliastro.twobody.sampling import TrueAnomalyBounds
-from poliastro.twobody.states import BaseState
 from poliastro.util import norm, wrap_angle
-from poliastro.warnings import PatchedConicsWarning
 
 ORBIT_FORMAT = "{r_p:.0f} x {r_a:.0f} x {inc:.1f} ({frame}) orbit around {body} at epoch {epoch} ({scale})"
 # String representation for orbits around bodies without predefined
 # Reference frame
-ORBIT_NO_FRAME_FORMAT = "{r_p:.0f} x {r_a:.0f} x {inc:.1f} orbit around {body} at epoch {epoch} ({scale})"
+ORBIT_NO_FRAME_FORMAT = (
+    "{r_p:.0f} x {r_a:.0f} x {inc:.1f} orbit around {body} at epoch {epoch} ({scale})"
+)
 
 
 class Orbit(OrbitCreationMixin):
@@ -175,11 +173,7 @@ class Orbit(OrbitCreationMixin):
     @cached_property
     def h_vec(self):
         """Specific angular momentum vector."""
-        h_vec = (
-            np.cross(self.r.to_value(u.km), self.v.to(u.km / u.s))
-            * u.km**2
-            / u.s
-        )
+        h_vec = np.cross(self.r.to_value(u.km), self.v.to(u.km / u.s)) * u.km**2 / u.s
         return h_vec
 
     @cached_property
@@ -417,13 +411,9 @@ class Orbit(OrbitCreationMixin):
 
         """
         if value.ndim != 0:
-            raise ValueError(
-                "propagate only accepts scalar values for time of flight"
-            )
+            raise ValueError("propagate only accepts scalar values for time of flight")
 
-        if isinstance(value, time.Time) and not isinstance(
-            value, time.TimeDelta
-        ):
+        if isinstance(value, time.Time) and not isinstance(value, time.TimeDelta):
             time_of_flight = value - self.epoch
         else:
             # Works for both Quantity and TimeDelta objects
@@ -621,8 +611,15 @@ class Orbit(OrbitCreationMixin):
         else:
             res = orbit_new
         return res
-    
-    def apply_maneuver_custom(self, maneuver, debris_list=None, step_sec=None, render=False, intermediate=False):
+
+    def apply_maneuver_custom(
+        self,
+        maneuver,
+        debris_list=None,
+        step_sec=None,
+        render=False,
+        intermediate=False,
+    ):
         """Returns resulting `Orbit` after applying maneuver to self.
 
         Optionally return intermediate states (default to False).
@@ -637,7 +634,7 @@ class Orbit(OrbitCreationMixin):
         """
         if render:
             # Setup the dataframe
-            column_names = ["otv"] + [f'debris{i+1}' for i in range(len(debris_list))]
+            column_names = ["otv"] + [f"debris{i+1}" for i in range(len(debris_list))]
             df = pd.DataFrame(columns=column_names)
             total_frames = 0
 
@@ -653,21 +650,23 @@ class Orbit(OrbitCreationMixin):
 
                     # Custom Code for intermediate positions
                     # Prams for vis
-                    n_sec = delta_t.to(u.s).value # transfer_time in seconds
+                    n_sec = delta_t.to(u.s).value  # transfer_time in seconds
                     n_frames = int(n_sec / step_sec)  # number of frames
-                    dt = step_sec * u.s                 # step duration
+                    dt = step_sec * u.s  # step duration
 
                     for frame_id in tqdm(range(total_frames, total_frames + n_frames)):
                         otv_copy = otv_copy.propagate(dt)
-                        otv_pos , _ = otv_copy.rv()
+                        otv_pos, _ = otv_copy.rv()
                         otv_pos = otv_pos.to(u.km).value / 6371
-                        
+
                         new_data = [otv_pos]
                         # Adding debris data
-                        for i , debris in enumerate(debris_list):
-                            debris_list[i].poliastro_orbit = debris.poliastro_orbit.propagate(dt)
+                        for i, debris in enumerate(debris_list):
+                            debris_list[
+                                i
+                            ].poliastro_orbit = debris.poliastro_orbit.propagate(dt)
 
-                            deb_i_pos , _ = debris_list[i].poliastro_orbit.rv()
+                            deb_i_pos, _ = debris_list[i].poliastro_orbit.rv()
                             deb_i_pos = deb_i_pos.to(u.km).value / 6371
                             new_data.append(deb_i_pos)
 
@@ -676,7 +675,6 @@ class Orbit(OrbitCreationMixin):
 
                 # Propagate the otv using the whole period
                 orbit_new = orbit_new.propagate(delta_t)
-
 
             r, v = orbit_new.rv()
             vnew = v + delta_v
@@ -698,8 +696,6 @@ class Orbit(OrbitCreationMixin):
             return res, df
         else:
             return res, None
-    
-        
 
     def plot(self, label=None, use_3d=False, interactive=False):
         """Plots the orbit.

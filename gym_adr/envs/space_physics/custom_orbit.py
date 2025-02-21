@@ -634,7 +634,7 @@ class Orbit(OrbitCreationMixin):
         """
         if render:
             # Setup the dataframe
-            column_names = ["otv"] + [f"debris{i+1}" for i in range(len(debris_list))]
+            column_names = ["otv"] + [f"debris{i + 1}" for i in range(len(debris_list))]
             df = pd.DataFrame(columns=column_names)
             total_frames = 0
 

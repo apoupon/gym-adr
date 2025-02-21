@@ -1,8 +1,8 @@
 # import gymnasium as gym
-from gym_adr.envs.adr import ADREnv # import gym_adr
+from gym_adr.envs.adr import ADREnv  # import gym_adr
 
 if __name__ == "__main__":
-    env = ADREnv() # gym.make("gym_adr/ADR-v0", render_mode="human")
+    env = ADREnv()  # gym.make("gym_adr/ADR-v0", render_mode="human")
     observation, info = env.reset()
 
     for _ in range(100):

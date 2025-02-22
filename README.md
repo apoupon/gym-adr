@@ -13,6 +13,9 @@ A gym implementation of the environment used for "AI-Driven Risk-Aware Schedulin
 
 ## Quick start
 
+[!WARNING]
+Rendering the environment requires running the same environment sequentially with different configurations. In the first configuration, the agent uses removal steps to acquire a list of debris to deorbit. In the second configuration, the environment runs with time steps to smoothly render the orbital transfer vehicle's movement between the debris on the deorbited list. This second configuration is time-consuming because the agent is not actively training, many small actions are simulated, and rendering consumes additional computational resources. As a result, frequent rendering during training is not recommended.
+
 ## Description
 
 ## Contribute

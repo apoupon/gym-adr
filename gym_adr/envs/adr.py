@@ -88,8 +88,6 @@ class ADREnv(gym.Env):
         self.observation_space = self._initialize_observation_space()
         self.action_space = gym.spaces.Discrete(self.total_n_debris)
 
-        self.priority_list = np.ones(self.total_n_debris, dtype=int)
-
     def step(self, action):
         if DEBUG:
             print("\n -----  ENV STEP -----")
@@ -112,12 +110,12 @@ class ADREnv(gym.Env):
         self.transition_function(action=action, cv=cv, dt_min=dt_min)
 
         # reset priority list after computing reward
-        self.priority_list = np.ones(self.total_n_debris, dtype=int)
+        self.priority_scores = np.ones(self.total_n_debris, dtype=int)
 
         # Modify priority list if there is a priority debris (high risk of collision)
         priority_debris = self.get_priority()
         if priority_debris and self.priority_is_on:
-            self.priority_list[priority_debris] = 10
+            self.priority_scores[priority_debris] = 10
 
         observation = self.get_obs()
         info = self.get_info()
@@ -178,7 +176,7 @@ class ADREnv(gym.Env):
                 # [binary_flag_debris1, binary_flag_debris2...]
                 "binary_flags": gym.spaces.MultiBinary(self.total_n_debris),
                 # [priority_score_debris1, priority_score_debris2...]
-                "priority_scores": gym.spaces.MultiBinary(
+                "priority_scores": gym.spaces.MultiDiscrete(
                     self.total_n_debris,
                 ),
             }
@@ -205,9 +203,9 @@ class ADREnv(gym.Env):
         self.current_removing_debris = state[2]
         self.dv_left = state[3]
         self.dt_left = state[4]
-        self.binary_flags = state[5 : self.total_n_debris + 5]
+        self.binary_flags = state[5 : 5 + self.total_n_debris]
         self.priority_scores = state[
-            self.total_n_debris + 6 : 2 * self.total_n_debris + 6
+            5 + self.total_n_debris : 6 + self.total_n_debris * 2
         ]
 
         # render first frame
@@ -221,7 +219,7 @@ class ADREnv(gym.Env):
 
     def compute_reward(self, action, terminated):
         # Calculate reward using the priority list
-        reward = self.priority_list[action]
+        reward = self.priority_scores[action]
 
         # Set reward to 0 if the action is not legal
         if terminated:

@@ -4,7 +4,6 @@ from gym_adr.envs.adr import ADREnv  # import gym_adr
 
 if __name__ == "__main__":
     wandb.login()
-
     run = wandb.init(project="gym-adr")
 
     env = ADREnv()  # gym.make("gym_adr/ADR-v0", render_mode="human")

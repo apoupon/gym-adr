@@ -6,7 +6,7 @@ from typing import Optional
 from astropy import units as u
 
 from gym_adr.space_physics.simulator import Simulator
-from gym_adr.rendering import RenderEngine
+from gym_adr.rendering.rendering import RenderEngine
 import pandas as pd
 
 DEBUG = True
@@ -99,7 +99,7 @@ class ADREnv(gym.Env):
         self.render_mode = render_mode
 
         if self.render_mode:
-            self.deorbited_debris = []
+            self.deorbited_debris = [self.first_debris]
 
     def step(self, action):
         if DEBUG:
@@ -275,16 +275,14 @@ class ADREnv(gym.Env):
         Returns a random debris index to set as priority
         Taken from the available debris that have not been removed yet
         """
-        priority_debris = None
-
         # Get the list of indices where the binary flag is 0
         available_debris = [i for i, flag in enumerate(self.binary_flags) if flag == 0]
 
-        if random.random() < 0.3:
+        if available_debris and random.random() < 0.3:
             # Randomly select a debris from the available list
-            priority_debris = random.choice(available_debris)
+            return random.choice(available_debris)
 
-        return priority_debris
+        return None
 
     def _setup(self):
         pass
@@ -297,7 +295,7 @@ class ADREnv(gym.Env):
             starting_index=self.first_debris, n_debris=self.total_n_debris
         )
         print("Rendering in progress...")
-        df = pd.DataFrame()
+        df = pd.DataFrame([])
         for debris in self.deorbited_debris:
             transfer_frames = self.simulator.simulate_action(
                 action=debris, render=True, step_sec=step_sec

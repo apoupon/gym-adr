@@ -1,10 +1,14 @@
 # To do before release
 - register to Gym
 - run experiments with Stable-Baselines agents and debug with Weights & Biases
-- add rendering (render previous ep in the reset function and loop on it until next reset is reached ?)
+- finish rendering
+    - get rid of some assets, too heavy rn
+    - render in a window by default, not full screen
+    - get rid of some buttons (and in general, make it simpler)
+    - OpenALAudioManager and other audio messages ?
 - write readme
 - comment and clean the whole repo (i.e. maybe we don't need all these files in space_physics/)
-
+    - put deorbited_debris in info dict instead of attributes
 
 # gym-adr
 A gym implementation of the environment used for "AI-Driven Risk-Aware Scheduling for Active Debris Removal Missions", a paper published at SPAICE 2024, a European Space Agency conference.

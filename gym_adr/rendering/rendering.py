@@ -192,14 +192,16 @@ class RenderEngine(ShowBase):
 
         # otv
         self.update_trail("otv", "otv_trail", color=(0.3, 1, 1, 1), thickness=0.5)
-        otv_pos_str = current_row["otv"].strip("[]").split()
-        otv_pos = np.array([float(num) for num in otv_pos_str])
+        # otv_pos_str = current_row["otv"] /.strip("[]").split()
+        # otv_pos = np.array([float(num) for num in otv_pos_str])
+        otv_pos = np.array(current_row["otv"])
         self.otv_node.setPos(otv_pos[0], otv_pos[1], otv_pos[2])
 
         # otv rotation
         next_row = self.data.loc[self.current_frame + 1]
-        otv_next_pos_str = next_row["otv"].strip("[]").split()
-        otv_next_pos = np.array([float(num) for num in otv_next_pos_str])
+        # otv_next_pos_str = next_row["otv"].strip("[]").split()
+        # otv_next_pos = np.array([float(num) for num in otv_next_pos_str])
+        otv_next_pos = np.array(next_row["otv"])
         otv_dir = otv_next_pos - otv_pos
         otv_dir = otv_dir / np.linalg.norm(otv_dir)
         self.otv_node.setH(np.degrees(np.arctan2(otv_dir[1], otv_dir[0])))
@@ -221,15 +223,17 @@ class RenderEngine(ShowBase):
                 )
 
             # debris position
-            debris_i_pos_str = current_row[f"debris{i}"].strip("[]").split()
-            debris_i_pos = np.array([float(num) for num in debris_i_pos_str])
+            # debris_i_pos_str = current_row[f"debris{i}"].strip("[]").split()
+            # debris_i_pos = np.array([float(num) for num in debris_i_pos_str])
+            debris_i_pos = np.array(current_row[f"debris{i}"])
             self.debris_nodes[i].setPos(
                 debris_i_pos[0], debris_i_pos[1], debris_i_pos[2]
             )
 
             # debris rotation
-            debris_next_pos_str = next_row[f"debris{i}"].strip("[]").split()
-            debris_next_pos = np.array([float(num) for num in debris_next_pos_str])
+            # debris_next_pos_str = next_row[f"debris{i}"].strip("[]").split()
+            # debris_next_pos = np.array([float(num) for num in debris_next_pos_str])
+            debris_next_pos = np.array(next_row[f"debris{i}"])
             debris_dir = debris_next_pos - debris_i_pos
             debris_dir = debris_dir / np.linalg.norm(debris_dir)
             self.debris_nodes[i].setH(
@@ -284,9 +288,9 @@ class RenderEngine(ShowBase):
 
         all_points = []
         for i in range(frame_minus_n_points, current_frame, 10):
-            pos = self.data.iloc[i][name_in_df]
-            pos = pos.strip("[]").split()
-            pos = tuple([float(num) for num in pos])
+            pos = tuple(self.data.iloc[i][name_in_df])
+            # pos = pos.strip("[]").split()
+            # pos = tuple([float(num) for num in pos])
             all_points.append(pos)
 
         self.line_manager.update_line(

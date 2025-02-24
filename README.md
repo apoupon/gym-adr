@@ -1,11 +1,6 @@
 # To do before release
 - register to Gym
 - run experiments with Stable-Baselines agents and debug with Weights & Biases
-- finish rendering
-    - get rid of some assets, too heavy rn
-    - render in a window by default, not full screen
-    - get rid of some buttons (and in general, make it simpler)
-    - OpenALAudioManager and other audio messages ?
 - write readme
 - comment and clean the whole repo (i.e. maybe we don't need all these files in space_physics/)
     - put deorbited_debris in info dict instead of attributes
@@ -17,8 +12,8 @@ A gym implementation of the environment used for "AI-Driven Risk-Aware Schedulin
 
 ## Quick start
 
-[!WARNING]
-Rendering the environment requires running the same environment sequentially with different configurations. In the first configuration, the agent uses removal steps to acquire a list of debris to deorbit. In the second configuration, the environment runs with time steps to smoothly render the orbital transfer vehicle's movement between the debris on the deorbited list. This second configuration is time-consuming because the agent is not actively training, many small actions are simulated, and rendering consumes additional computational resources. As a result, frequent rendering during training is not recommended.
+> [!WARNING]
+> Rendering the environment requires running the same environment sequentially with different configurations. In the first configuration, the agent uses removal steps to acquire a list of debris to deorbit. In the second configuration, the environment runs with time steps to smoothly render the orbital transfer vehicle's movement between the debris on the deorbited list. This second configuration is time-consuming because the agent is not actively training, many small actions are simulated, and rendering consumes additional computational resources. As a result, frequent rendering during training is not recommended.
 
 ## Description
 

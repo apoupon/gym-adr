@@ -58,9 +58,6 @@ class RenderEngine(ShowBase):
 
         self.accept("x", self.userExit)
 
-        self.fullscreen = True
-        # self.toggle_fullscreen() # initially go out of fullscreen
-
         self.taskMgr.doMethodLater(1 / 30, self.renderer, "renderer")
 
     def toggle_fullscreen(self):
@@ -241,8 +238,9 @@ class RenderEngine(ShowBase):
             self.debris_nodes[i].setP(90 + np.degrees(np.arcsin(debris_dir[2])))
             self.debris_nodes[i].setR(0)
 
+        fuel_init = self.data["fuel"].iloc[0]
         current_fuel = current_row["fuel"]
-        self.fuel_label.setText(f"Fuel: {round(current_fuel / 10, 1)}%")
+        self.fuel_label.setText(f"Fuel: {round(100 * (current_fuel / fuel_init))}%")
 
         if self.current_target != current_row["target_index"]:
             if self.current_target not in self.already_deorbited:
@@ -791,7 +789,6 @@ class RenderEngine(ShowBase):
     def add_text_label(
         self, text="PlaceHolder", pos=(-1, 1), scale=0.06, alignment_mode=TextNode.ALeft
     ):
-        custom_font = self.loader.loadFont("gym_adr/assets/textures/SF-Pro.ttf")
         text_label = OnscreenText(
             text=text,
             pos=pos,  # Position on the screen
@@ -799,7 +796,6 @@ class RenderEngine(ShowBase):
             fg=(1, 1, 1, 1),  # Text color (R, G, B, A)
             bg=(0, 0, 0, 0),  # Background color (R, G, B, A)
             align=alignment_mode,  # Text alignment
-            font=custom_font,
             mayChange=True,
         )  # Allow text to change dynamically
         return text_label

@@ -7,11 +7,11 @@ import copy
 from astropy import units as u
 
 from gym_adr.space_physics.simulator import Simulator
+from gym_adr.rendering.rendering import RenderEngine
 
 import pandas as pd
 
 import multiprocessing
-import time
 
 DEBUG = True
 
@@ -234,8 +234,6 @@ class ADREnv(gym.Env):
     def get_info(self):
         info = {}
 
-        # store deorbited debris here
-
         return info
 
     def compute_reward(self, action, terminated):
@@ -323,10 +321,11 @@ class ADREnv(gym.Env):
     def close(self):
         pass
 
+
 def run_render_engine(df):
-    from gym_adr.rendering.rendering import RenderEngine
     renderEngine = RenderEngine(df)
     renderEngine.run()
+
 
 def start_render_engine_in_subprocess(df):
     process = multiprocessing.Process(target=run_render_engine, args=(df,))

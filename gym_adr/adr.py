@@ -2,6 +2,7 @@ import gymnasium as gym
 import numpy as np
 import random
 from typing import Optional
+import copy
 
 from astropy import units as u
 
@@ -55,7 +56,7 @@ class ADREnv(gym.Env):
     metadata = {
         "render_modes": ["human"],
         "render_fps": 4,
-    }  # check value for render_fps
+    }  # check value for render_fps and how to do the link with the render engine
 
     def __init__(
         self,
@@ -92,14 +93,11 @@ class ADREnv(gym.Env):
             starting_index=self.first_debris, n_debris=self.total_n_debris
         )
 
-        self.observation_space = self._initialize_observation_space()
+        self._initialize_observation_space()
         self.action_space = gym.spaces.Discrete(self.total_n_debris)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
-
-        if self.render_mode:
-            self.deorbited_debris = [self.first_debris]
 
     def step(self, action):
         if DEBUG:
@@ -117,8 +115,13 @@ class ADREnv(gym.Env):
         cv, dt_min = self.simulator.simulate_action(action)
 
         terminated = self.is_terminated(action, cv, dt_min)
-        if not terminated:
-            self.deorbited_debris.append(action)
+        if terminated:
+            observation = self.get_obs()
+            reward = 0
+            info = {}
+            return observation, reward, terminated, False, info
+
+        self.deorbited_debris.append(action)
 
         reward = self.compute_reward(action, terminated)
 
@@ -133,7 +136,6 @@ class ADREnv(gym.Env):
             self.priority_scores[priority_debris] = 10
 
         observation = self.get_obs()
-        print("observation : ", observation)
         info = self.get_info()
 
         return observation, reward, terminated, False, info
@@ -143,28 +145,29 @@ class ADREnv(gym.Env):
         super().reset(seed=seed)
         self._setup()  # à voir quand on s'occupe du rendering
 
-        self.deorbited_debris = []
-
         if self.random_first_debris:
             self.first_debris = random.randint(0, self.total_n_debris - 1)
+            print("first debris : ", self.first_debris)
         self.simulator.__init__(
             starting_index=self.first_debris, n_debris=self.total_n_debris
-        )
+        )  # is it useful here ? or just refuel OTV and intialize first debris
+        self.deorbited_debris = [self.first_debris]
 
         # initialize state
         state = np.concatenate(
             [
                 np.array(
                     [
-                        0,
-                        self.total_n_debris,
+                        1,
+                        self.total_n_debris
+                        - 1,  # - 1 ? because it is starting at self.first debris that has its binary flag to 1
                         self.first_debris,
                         self.dv_max_per_mission,
                         self.dt_max_per_mission,
                     ]
                 ),
                 np.zeros(self.total_n_debris, dtype=int),
-                np.zeros(self.total_n_debris, dtype=int),
+                np.ones(self.total_n_debris, dtype=int),
             ]
         )
         state[5 + self.first_debris] = 1
@@ -225,12 +228,10 @@ class ADREnv(gym.Env):
             5 + self.total_n_debris : 6 + self.total_n_debris * 2
         ]
 
-        # render first frame
-
     def get_info(self):
         info = {}
 
-        # store dataframe in info ? (rendering)
+        # store deorbited debris here
 
         return info
 
@@ -287,24 +288,34 @@ class ADREnv(gym.Env):
     def _setup(self):
         pass
 
-    def render(self, step_sec=20):
+    def render(self, step_sec=40):
         """
         Render the previous episode.
         """
-        self.simulator.__init__(
-            starting_index=self.first_debris, n_debris=self.total_n_debris
-        )
+        if len(self.deorbited_debris) <= 1:
+            print(
+                "OTV didn't manage to deorbit any debris, therefore there is nothing to visualize. Try again."
+            )
+            return
+
         print("Rendering in progress...")
+        print("deorbited debris : ", self.deorbited_debris)
         df = pd.DataFrame([])
-        for debris in self.deorbited_debris:
+        first_debris = self.deorbited_debris[0]
+        self.simulator.otv_orbit = copy.copy(
+            self.simulator.debris_list[first_debris].poliastro_orbit
+        )
+        self.simulator.current_fuel = self.dv_max_per_mission
+        for debris in self.deorbited_debris[1:]:
             transfer_frames = self.simulator.simulate_action(
                 action=debris, render=True, step_sec=step_sec
             )
             df = pd.concat([df, transfer_frames], axis=0).reset_index(drop=True)
 
-        print("df : ", df)
         renderEngine = RenderEngine(df)
         renderEngine.run()
+
+        # find a way so that example.py continue running when we kill the render window/the rendered episode ends
 
     def close(self):
         pass

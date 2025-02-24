@@ -28,8 +28,9 @@ if __name__ == "__main__":
             }
         )
 
-        if (terminated or truncated) and _ % 50 == 0:
-            env.render()
+        if terminated or truncated:
+            print('Episode terminanted ! Reset ongoing...')
+            env.render() if _ > 50 else None
             observation, info = env.reset()
 
     env.close()

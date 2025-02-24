@@ -1,6 +1,6 @@
 import numpy as np
 
-from gym_adr.rendering.render_utils import setup_skybox, rotate_object, LineManager
+from gym_adr.rendering.utils import setup_skybox, rotate_object, LineManager
 
 from panda3d.core import Point3, MouseButton, PointLight, Mat4
 from panda3d.core import Vec3, KeyboardButton, TextureStage, TransparencyAttrib
@@ -18,12 +18,12 @@ from panda3d.core import loadPrcFileData, WindowProperties
 
 # Detect the screen resolution
 monitor = get_monitors()[0]
-screen_width = monitor.width
-screen_height = monitor.height
+window_width = monitor.width // 2
+window_height = monitor.height // 2
 
-# Set Panda3D to full screen with the detected resolution
-loadPrcFileData("", "fullscreen 1")
-loadPrcFileData("", f"win-size {screen_width} {screen_height}")
+# Launch the rendering in a window
+loadPrcFileData("", "fullscreen 0")
+loadPrcFileData("", f"win-size {window_width} {window_height}")
 
 
 class RenderEngine(ShowBase):
@@ -56,7 +56,6 @@ class RenderEngine(ShowBase):
         self.accept("f", self.on_f_pressed)  # toggle full circle trajectory
         self.accept("h", self.on_h_pressed)  # toggle hud
 
-        self.accept("escape", self.toggle_fullscreen)
         self.accept("x", self.userExit)
 
         self.fullscreen = True
@@ -73,7 +72,7 @@ class RenderEngine(ShowBase):
         else:
             # Switch to full-screen mode
             wp.setFullscreen(True)
-            wp.setSize(screen_width, screen_height)
+            wp.setSize(window_width, window_height)
         self.fullscreen = not self.fullscreen
         self.win.requestProperties(wp)
 

@@ -7,8 +7,11 @@ import copy
 from astropy import units as u
 
 from gym_adr.space_physics.simulator import Simulator
-from gym_adr.rendering.rendering import RenderEngine
+
 import pandas as pd
+
+import multiprocessing
+import time
 
 DEBUG = True
 
@@ -312,10 +315,20 @@ class ADREnv(gym.Env):
             )
             df = pd.concat([df, transfer_frames], axis=0).reset_index(drop=True)
 
-        renderEngine = RenderEngine(df)
-        renderEngine.run()
+        render_process = start_render_engine_in_subprocess(df)
+        render_process.join()
 
         # find a way so that example.py continue running when we kill the render window/the rendered episode ends
 
     def close(self):
         pass
+
+def run_render_engine(df):
+    from gym_adr.rendering.rendering import RenderEngine
+    renderEngine = RenderEngine(df)
+    renderEngine.run()
+
+def start_render_engine_in_subprocess(df):
+    process = multiprocessing.Process(target=run_render_engine, args=(df,))
+    process.start()
+    return process

@@ -1,0 +1,231 @@
+import copy
+import numpy as np
+import scipy.io
+import pandas as pd
+
+from astropy import units as u
+from poliastro.bodies import Earth
+
+from gym_adr.space_physics.custom_orbit import Orbit
+import gym_adr.space_physics.custom_maneuvres as custom_maneuvres
+
+
+DEBUG = False
+
+
+class Debris:
+    def __init__(self, poliastro_orbit, norad_id):
+        self.poliastro_orbit = poliastro_orbit
+        self.norad_id = norad_id
+
+
+class Simulator:
+    def __init__(
+        self,
+        render=False,
+        starting_index: int = 0,
+        n_debris: int = 10,
+        starting_fuel: float = 1000.0,
+    ):
+        # Initialise the debris dictionary and assign the otv to an Orbit
+        self.debris_list = self.init_random_debris(n=n_debris)
+        # self.debris_list = self.debris_from_dataset(n=n_debris) #le dataset contient 320 debris
+
+        if DEBUG:
+            for idx, target_debris in enumerate(self.debris_list):
+                print("Debris ", idx)
+                target_debris = target_debris.poliastro_orbit
+                print(
+                    target_debris.a,
+                    target_debris.ecc,
+                    target_debris.inc,
+                    target_debris.raan,
+                    target_debris.argp,
+                    target_debris.nu,
+                )
+            print("Starting index: ", starting_index)
+
+        self.otv_orbit = copy.copy(self.debris_list[starting_index].poliastro_orbit)
+        self.current_fuel = starting_fuel
+
+    def simulate_action(self, action, render=False, step_sec=15):
+        """
+        Input:
+            action : (next_debris_norad_id , dt_given)
+        Output:
+            DV_required, DT_required
+
+        Can expand to testing multiple strategies
+        Updates all objects in simulator
+        When propagating, add at the end the (dt from action - dt required)
+        """
+        location_frames_df, DV_required, DT_required = self.strategy_1(
+            action, render=render, step_sec=step_sec
+        )
+
+        if render:
+            return location_frames_df
+        return DV_required, DT_required
+
+    def strategy_1(self, action, render=False, step_sec=15):
+        """
+        Strategy 1 defined in transfer strategies slides
+        1. Inc
+        2. Raan
+        3. Hohmann
+        """
+
+        # Set the target from the action
+        target_debris = self.debris_list[action].poliastro_orbit
+
+        # ---- Inclination change
+        inc_change = custom_maneuvres.simple_inc_change(self.otv_orbit, target_debris)
+
+        # Get the transfer time of the hoh_phas
+        transfer_time = inc_change.get_total_time()
+
+        # Apply the maneuver to the otv
+        self.otv_orbit, inc_frames = self.otv_orbit.apply_maneuver_custom(
+            inc_change,
+            copy.deepcopy(self.debris_list) if render else None,
+            step_sec=step_sec,
+            render=render,
+        )
+        # Append the current fuel to the frames df
+        if render:
+            inc_frames["fuel"] = self.current_fuel
+        self.current_fuel -= inc_change.get_total_cost().value
+
+        # Propagate all debris to the end of the transfer
+        for i, debris in enumerate(self.debris_list):
+            self.debris_list[i].poliastro_orbit = debris.poliastro_orbit.propagate(
+                transfer_time
+            )
+
+        # ---- Raan change
+        target_debris = self.debris_list[action].poliastro_orbit
+        raan_change = custom_maneuvres.simple_raan_change(self.otv_orbit, target_debris)
+
+        # Get the transfer time of the hoh_phas
+        transfer_time = raan_change.get_total_time()
+
+        # Apply the maneuver to the otv
+        self.otv_orbit, raan_frames = self.otv_orbit.apply_maneuver_custom(
+            raan_change,
+            copy.deepcopy(self.debris_list) if render else None,
+            step_sec=step_sec,
+            render=render,
+        )
+        # Append the current fuel to the frames df
+        if render:
+            raan_frames["fuel"] = self.current_fuel
+        self.current_fuel -= inc_change.get_total_cost().value
+
+        # Propagate all debris to the end of the transfer
+        for i, debris in enumerate(self.debris_list):
+            self.debris_list[i].poliastro_orbit = debris.poliastro_orbit.propagate(
+                transfer_time
+            )
+
+        # ---- Hohmann
+        target_debris = self.debris_list[action].poliastro_orbit
+        hoh_change = custom_maneuvres.hohmann_with_phasing(
+            self.otv_orbit, target_debris
+        )
+
+        # Get the transfer time of the hoh_phas
+        transfer_time = hoh_change.get_total_time()
+
+        # Apply the maneuver to the otv
+        self.otv_orbit, hoh_frames = self.otv_orbit.apply_maneuver_custom(
+            hoh_change,
+            copy.deepcopy(self.debris_list) if render else None,
+            step_sec=step_sec,
+            render=render,
+        )
+        # Append the current fuel to the frames df
+        if render:
+            hoh_frames["fuel"] = self.current_fuel
+        self.current_fuel -= inc_change.get_total_cost().value
+
+        # Propagate all debris to the end of the transfer
+        for i, debris in enumerate(self.debris_list):
+            self.debris_list[i].poliastro_orbit = debris.poliastro_orbit.propagate(
+                transfer_time
+            )
+
+        # Total resources used
+        total_dv = (
+            hoh_change.get_total_cost()
+            + raan_change.get_total_cost()
+            + inc_change.get_total_cost()
+        )
+        min_time = (
+            hoh_change.get_total_time()
+            + raan_change.get_total_time()
+            + inc_change.get_total_time()
+        )
+
+        if render:
+            # Concat the dataframes
+            location_frames_df = pd.concat(
+                [inc_frames, raan_frames, hoh_frames], axis=0
+            )
+            # Add a column for the action
+            location_frames_df["target_index"] = action
+
+            return location_frames_df, total_dv, min_time
+
+        return None, total_dv, min_time
+
+    def init_random_debris(self, n):
+        """
+        Output:
+            list (norad_id , Orbit)
+        """
+        np.random.seed(42)  ################### see how to deal with random seed
+
+        debris_list = []
+
+        for norad_id in range(n):
+            min_a = 6371 + 200
+            max_a = 6371 + 10000
+            a = np.random.uniform(min_a, max_a) * u.km
+            ecc = 0 * u.one
+            inc = np.random.uniform(0, 45) * u.deg
+            raan = np.random.uniform(0, 45) * u.deg
+            argp = 0 * u.deg
+            nu = np.random.uniform(-180, 180) * u.deg
+
+            debris = Orbit.from_classical(Earth, a, ecc, inc, raan, argp, nu)
+            debris_list.append(Debris(poliastro_orbit=debris, norad_id=norad_id))
+
+        return debris_list
+
+    def debris_from_dataset(self, n):
+        """
+        Transform n first debris from the dataset in Debris object
+        Output:
+            list (norad_id , Orbit)
+        """
+        debris_list = []
+        dataset = scipy.io.loadmat("data/TLE_iridium.mat")["TLE_iridium"]
+
+        # Select only favourable debris
+        i = 0
+        while len(debris_list) < n + 1:
+            norad_id = dataset[0][i]
+            a = dataset[6][i] * u.km
+            ecc = 0 * u.one  # ecc = dataset[3][i] * u.one for more accurate modelling
+            inc = dataset[1][i] * u.deg
+            raan = dataset[2][i] * u.deg
+            argp = 0 * u.deg  # dataset[4][i] * u.deg for more accurate modelling
+            nu = (dataset[5][i] - 180) * u.deg
+
+            if dataset[2][i] < 20:
+                debris = Orbit.from_classical(Earth, a, ecc, inc, raan, argp, nu)
+                debris_list.append(Debris(poliastro_orbit=debris, norad_id=norad_id))
+
+            i += 1
+
+        return debris_list

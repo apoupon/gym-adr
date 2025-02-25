@@ -389,6 +389,19 @@ files = [
 markers = {main = "sys_platform != \"linux\" and platform_system == \"Windows\"", dev = "sys_platform == \"win32\""}
 
 [[package]]
+name = "commitlint"
+version = "1.3.0"
+description = "commitlint is is a pre-commit hook designed to lint your commit messages according to the Conventional Commits standard."
+optional = false
+python-versions = "*"
+groups = ["dev"]
+markers = "sys_platform != \"linux\""
+files = [
+    {file = "commitlint-1.3.0-py3-none-any.whl", hash = "sha256:64691dace7caa58ab9bdf904fca27d899935025b445a1c216c911d8fba0b22e4"},
+    {file = "commitlint-1.3.0.tar.gz", hash = "sha256:a8d7f2de60ed0d29d63c1ff2bd71c31acd9425b5e2c2685d90c09abfbb2e3c7f"},
+]
+
+[[package]]
 name = "contourpy"
 version = "1.3.0"
 description = "Python library for calculating contours of 2D quadrilateral grids"
@@ -1267,6 +1280,7 @@ description = "lightweight wrapper around basic LLVM functionality"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
+markers = "sys_platform != \"linux\""
 files = [
     {file = "llvmlite-0.43.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:a289af9a1687c6cf463478f0fa8e8aa3b6fb813317b0d70bf1ed0759eab6f761"},
     {file = "llvmlite-0.43.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:6d4fd101f571a31acb1559ae1af30f30b1dc4b3186669f92ad780e17c81e91bc"},
@@ -1391,6 +1405,7 @@ description = "compiling Python code using LLVM"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
+markers = "sys_platform != \"linux\""
 files = [
     {file = "numba-0.60.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:5d761de835cd38fb400d2c26bb103a2726f548dc30368853121d66201672e651"},
     {file = "numba-0.60.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:159e618ef213fba758837f9837fb402bbe65326e60ba0633dbe6c7f274d42c1b"},
@@ -2866,4 +2881,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9,<3.11"
-content-hash = "96023080317f080c400bcd2e9101db32203398074f656be1120694b0e3debda8"
+content-hash = "4d4f8ecd09947eb4104ca15afda0c7ebdb288eccf010a043b88113b9269c8c20"

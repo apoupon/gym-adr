@@ -22,44 +22,68 @@ class ADREnv(gym.Env):
 
     Active Debris Removal environment.
 
-    The goal of the agent is to ...
+    The goal of the agent is to deorbit as many debris as possible given constraints on fuel
+    and time. The agent is an Orbital Transfer Vehicle (OTV).
 
     ## Action Space
 
+    The action space is discrete and consists of n values, n being the number of debris in
+    orbit around the Earth.
 
     ## Observation Space
 
+    The observation space is a (5+2n)-dimensional vector representing the state of the agent:
+    - removal_step: refer to the number of debris deorbited by the OTV
+    - number_debris_left: refer to the number of debris still in orbits around the Earth
+    - current_removing_debris: refer to the current target debris
+    - dv_left: refer to the current amount of fuel available to the OTV
+    - dt_left: refer to the current amount of time available to the OTV
+    - binary_flag_debris_1, ..., binary_flag_debris_n: refer to the state of
+        debris (0 is in orbit, 1 is already deorbited)
+    - priority_score_debris_1, ..., priority_score_debris_n: refer to the priority
+        score of debris (1 is not prioritary, 10 is prioritary = with a high chance of collision)
 
     ## Rewards
 
+    The reward is 1 when the OTV deorbit an non-prioritary debris, 10 when it deorbit a prioritary
+    debris, 0 if it doesn't deorbit any debris (no more fuel/time or debris already deorbited).
 
     ## Success Criteria
 
+    The environment is considered solved if at least 95% debris in orbit have been deorbited during
+    the mission.
 
     ## Starting State
 
+    The agent starts at the position of a random debris. This debris is considered deorbited for the
+    rest of the episode.
 
     ## Episode Termination
 
+    The episode terminates when the OTV run out of fuel (or time) or when it chose as target debris
+    a debris that has already been deorbited.
 
     ## Arguments
 
-
-    ## Reset Arguments
-
+    * `total_n_debris`: (int) The number of total debris in orbit around the Earth. Default is `10`.
+    * `dv_max_per_mission`: (int) The total amount of fuel available at the start of the mission.
+        Default is `5`.
+    * `dt_max_per_mission`: (int) The initial duration of the mission. Default is `100`.
+    * `dt_max_per_transfer`: (int) The maximum amount a transfer from one debris to one other can take.
+        Default is `30`.
+    * `random_first_debris`: (bool) The debris chosen to initialize the position of the OTV.
+        Default is `True`.
+    * `first_debris`: (int) If `random_first_debris` is set to `False`, the debris chosen to initialize
+        the position of the OTV. Default is `None`.
 
     ## Version History
 
-
-    ## References
-
-
+    * v0: Original version
     """
 
     metadata = {
         "render_modes": ["human"],
-        "render_fps": 4,
-    }  # check value for render_fps and how to do the link with the render engine
+    }
 
     def __init__(
         self,
@@ -68,8 +92,6 @@ class ADREnv(gym.Env):
         dv_max_per_mission: int = 5,
         dt_max_per_mission: int = 100,
         dt_max_per_transfer: int = 30,
-        priority_is_on: bool = True,
-        time_based_action: bool = False,
         random_first_debris: bool = True,
         first_debris: Optional[int] = 3,
     ):
@@ -80,15 +102,8 @@ class ADREnv(gym.Env):
         self.dv_max_per_mission = dv_max_per_mission  # [km/s]
         self.dt_max_per_mission = dt_max_per_mission  # [day]
         self.dt_max_per_transfer = dt_max_per_transfer  # [day]
-        self.priority_is_on = priority_is_on
-        self.time_based_action = time_based_action
         self.random_first_debris = random_first_debris
         self.first_debris = first_debris
-
-        #######
-        self.fuel_uses_in_episode = []  # to log the fuel use
-        self.time_uses_in_episode = []
-        #######
 
         if self.random_first_debris:
             self.first_debris = random.randint(0, self.total_n_debris - 1)
@@ -135,7 +150,7 @@ class ADREnv(gym.Env):
 
         # Modify priority list if there is a priority debris (high risk of collision)
         priority_debris = self.get_priority()
-        if priority_debris and self.priority_is_on:
+        if priority_debris:
             self.priority_scores[priority_debris] = 10
 
         observation = self.get_obs()
@@ -161,9 +176,9 @@ class ADREnv(gym.Env):
             [
                 np.array(
                     [
-                        1,
+                        1,  # we initialize the OTV at the position of a debris and consider this debris as deorbited
                         self.total_n_debris
-                        - 1,  # - 1 ? because it is starting at self.first debris that has its binary flag to 1
+                        - 1,  # -1 because we consider the first debris as already deorbited
                         self.first_debris,
                         self.dv_max_per_mission,
                         self.dt_max_per_mission,
@@ -177,6 +192,7 @@ class ADREnv(gym.Env):
         self._set_state(state)
 
         observation = self.get_obs()
+        print("observation : ", observation)
         info = self.get_info()
 
         return observation, info
@@ -187,7 +203,8 @@ class ADREnv(gym.Env):
                 # [removal_step, number_debris_left, current_removing_debris]
                 "step_and_debris": gym.spaces.MultiDiscrete(
                     np.array(
-                        [self.total_n_debris, self.total_n_debris, self.total_n_debris]
+                        [self.total_n_debris, self.total_n_debris, self.total_n_debris],
+                        dtype=np.int64,
                     )
                 ),
                 # [dv_left, dt_left]
@@ -197,10 +214,12 @@ class ADREnv(gym.Env):
                     dtype=np.float64,
                 ),
                 # [binary_flag_debris1, binary_flag_debris2...]
-                "binary_flags": gym.spaces.MultiBinary(self.total_n_debris),
+                "binary_flags": gym.spaces.MultiBinary(
+                    np.full(self.total_n_debris, 1, dtype=np.int64)
+                ),
                 # [priority_score_debris1, priority_score_debris2...]
                 "priority_scores": gym.spaces.MultiDiscrete(
-                    self.total_n_debris,
+                    np.full(self.total_n_debris, 10, dtype=np.int64)
                 ),
             }
         )
@@ -220,7 +239,6 @@ class ADREnv(gym.Env):
         }
 
     def _set_state(self, state):
-        # check every value
         self.removal_step = state[0]
         self.number_debris_left = state[1]
         self.current_removing_debris = state[2]
@@ -315,8 +333,6 @@ class ADREnv(gym.Env):
 
         render_process = start_render_engine_in_subprocess(df)
         render_process.join()
-
-        # find a way so that example.py continue running when we kill the render window/the rendered episode ends
 
     def close(self):
         pass

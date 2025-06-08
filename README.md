@@ -1,15 +1,24 @@
 # To do before release
-- register to Gym
 - run experiments with Stable-Baselines agents and debug with Weights & Biases
 - write readme
 - comment and clean the whole repo (i.e. maybe we don't need all these files in space_physics/)
-    - put deorbited_debris in info dict instead of attributes
-    - utilité dt_max_per_transfer ?
+- rendering canceled if illegal step
+- essayer de gérer le rendering de la même façon que les env Gym
 
 # gym-adr
 A gym implementation of the environment used for "AI-Driven Risk-Aware Scheduling for Active Debris Removal Missions", a paper published at SPAICE 2024, a European Space Agency conference.
 
 ## Installation
+
+Create a virtual environment with Python 3.10 and activate it, e.g. with [`miniconda`](https://docs.anaconda.com/free/miniconda/index.html):
+```bash
+conda create -y -n active_debris_removal python=3.10 && conda activate active_debris_removal
+```
+
+Install gym-adr:
+```bash
+pip install gym-adr
+```
 
 ## Quick start
 
@@ -48,11 +57,6 @@ The observation space is a (5+2n)-dimensional vector representing the state of t
 The reward is 1 when the OTV deorbit an non-prioritary debris, 10 when it deorbit a prioritary
 debris, 0 if it doesn't deorbit any debris (no more fuel/time or debris already deorbited).
 
-### Success Criteria
-
-The environment is considered solved if at least 95% debris in orbit have been deorbited during
-the mission.
-
 ### Starting State
 
 The agent starts at the position of a random debris. This debris is considered deorbited for the
@@ -69,8 +73,6 @@ a debris that has already been deorbited.
 * `dv_max_per_mission`: (int) The total amount of fuel available at the start of the mission.
     Default is `5`.
 * `dt_max_per_mission`: (int) The initial duration of the mission. Default is `100`.
-* `dt_max_per_transfer`: (int) The maximum amount a transfer from one debris to one other can take.
-    Default is `30`.
 * `random_first_debris`: (bool) The debris chosen to initialize the position of the OTV.
     Default is `True`.
 * `first_debris`: (int) If `random_first_debris` is set to `False`, the debris chosen to initialize

@@ -1,6 +1,7 @@
 import gymnasium as gym
 from gymnasium.utils.env_checker import check_env
-import numpy as np
+
+import gym_adr  # noqa: F401
 
 
 def test_env():

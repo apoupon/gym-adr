@@ -2,15 +2,15 @@ from functools import cached_property
 from warnings import warn
 import pandas as pd
 import copy
-
+from tqdm import tqdm
 import numpy as np
+
 from astropy import time, units as u
 from astropy.coordinates import (
     CartesianDifferential,
     CartesianRepresentation,
 )
 
-from tqdm import tqdm
 from poliastro.bodies import Earth
 from poliastro.core.events import elevation_function as elevation_function_fast
 from poliastro.frames.util import get_frame
@@ -21,6 +21,7 @@ from poliastro.twobody.orbit.creation import OrbitCreationMixin
 from poliastro.twobody.propagation import FarnocchiaPropagator, PropagatorKind
 from poliastro.twobody.sampling import TrueAnomalyBounds
 from poliastro.util import norm, wrap_angle
+
 
 ORBIT_FORMAT = "{r_p:.0f} x {r_a:.0f} x {inc:.1f} ({frame}) orbit around {body} at epoch {epoch} ({scale})"
 # String representation for orbits around bodies without predefined

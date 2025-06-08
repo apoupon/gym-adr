@@ -1,7 +1,5 @@
 import numpy as np
 
-from gym_adr.rendering.utils import setup_skybox, rotate_object, LineManager
-
 from panda3d.core import Point3, MouseButton, PointLight, Mat4
 from panda3d.core import Vec3, KeyboardButton, TextureStage, TransparencyAttrib
 from panda3d.core import LightAttrib, CardMaker, NodePath, TextNode
@@ -16,6 +14,8 @@ from direct.gui.OnscreenImage import OnscreenImage
 
 from screeninfo import get_monitors
 from panda3d.core import loadPrcFileData, WindowProperties
+
+from gym_adr.rendering.utils import setup_skybox, rotate_object, LineManager
 
 # Detect the screen resolution
 monitor = get_monitors()[0]
@@ -192,15 +192,11 @@ class RenderEngine(ShowBase):
 
         # otv
         self.update_trail("otv", "otv_trail", color=(0.3, 1, 1, 1), thickness=0.5)
-        # otv_pos_str = current_row["otv"] /.strip("[]").split()
-        # otv_pos = np.array([float(num) for num in otv_pos_str])
         otv_pos = np.array(current_row["otv"])
         self.otv_node.setPos(otv_pos[0], otv_pos[1], otv_pos[2])
 
         # otv rotation
         next_row = self.data.loc[self.current_frame + 1]
-        # otv_next_pos_str = next_row["otv"].strip("[]").split()
-        # otv_next_pos = np.array([float(num) for num in otv_next_pos_str])
         otv_next_pos = np.array(next_row["otv"])
         otv_dir = otv_next_pos - otv_pos
         otv_dir = otv_dir / np.linalg.norm(otv_dir)
@@ -223,16 +219,12 @@ class RenderEngine(ShowBase):
                 )
 
             # debris position
-            # debris_i_pos_str = current_row[f"debris{i}"].strip("[]").split()
-            # debris_i_pos = np.array([float(num) for num in debris_i_pos_str])
             debris_i_pos = np.array(current_row[f"debris{i}"])
             self.debris_nodes[i].setPos(
                 debris_i_pos[0], debris_i_pos[1], debris_i_pos[2]
             )
 
             # debris rotation
-            # debris_next_pos_str = next_row[f"debris{i}"].strip("[]").split()
-            # debris_next_pos = np.array([float(num) for num in debris_next_pos_str])
             debris_next_pos = np.array(next_row[f"debris{i}"])
             debris_dir = debris_next_pos - debris_i_pos
             debris_dir = debris_dir / np.linalg.norm(debris_dir)
@@ -290,8 +282,6 @@ class RenderEngine(ShowBase):
         all_points = []
         for i in range(frame_minus_n_points, current_frame, 10):
             pos = tuple(self.data.iloc[i][name_in_df])
-            # pos = pos.strip("[]").split()
-            # pos = tuple([float(num) for num in pos])
             all_points.append(pos)
 
         self.line_manager.update_line(
@@ -301,18 +291,10 @@ class RenderEngine(ShowBase):
     def make_otv(self):
         self.otv_node = self.loader.loadModel("gym_adr/assets/models/otv.dae")
         albedo_tex = self.loader.loadTexture("gym_adr/assets/textures/otv_albedo.png")
-        # emission_tex = self.loader.loadTexture("src/Assets/Textures/otv_emission.png")
         self.otv_node.reparentTo(self.render)
 
         ts_albedo = TextureStage("albedo")
         self.otv_node.setTexture(ts_albedo, albedo_tex)
-
-        # ts_emission = TextureStage('emission')
-        # self.otv_node.setTexture(ts_emission, emission_tex)
-
-        # self.otv_node.setShaderInput("albedoMap", albedo_tex)
-        # self.otv_node.setShaderInput("emissionMap", emission_tex)
-        # self.otv_node.setShader(Shader.load(Shader.SL_GLSL, vertex="src/simulator/shaders/otv.vert", fragment="src/simulator/shaders/otv.frag"))
         self.otv_node.setScale(0.005)
 
     def make_sat(self):
@@ -323,8 +305,6 @@ class RenderEngine(ShowBase):
         ts_albedo = TextureStage("albedo")
         node.setTexture(ts_albedo, albedo_tex)
 
-        # node.setShaderInput("albedoMap", albedo_tex)
-        # node.setShader(Shader.load(Shader.SL_GLSL, vertex="src/simulator/shaders/otv.vert", fragment="src/simulator/shaders/sat.frag"))
         node.setScale(0.005)
 
         return node
@@ -565,7 +545,9 @@ class RenderEngine(ShowBase):
         self.all_labels.append(self.fuel_label)
         self.all_labels.append(self.target_label)
 
-        self.otv_label = self.add_text_label(text="OTV", pos=(0, 0), scale=0.05)
+        self.otv_label = self.add_text_label(
+            text="OTV", pos=(0, 0), scale=0.05, fg=(0, 1, 0, 1)
+        )
         self.all_labels.append(self.otv_label)
 
         self.debris_labels = []
@@ -575,8 +557,6 @@ class RenderEngine(ShowBase):
             )
 
         self.all_labels += self.debris_labels  # add all debris labels to all labels
-
-        # self.circle_img = self.add_image("src/Assets/Textures/circle.png" , pos=(0 , 0) , scale=0.1)
 
         ctrl_x = -1.5
         ctrl_y = -0.9
@@ -656,7 +636,6 @@ class RenderEngine(ShowBase):
 
     def update_hud(self):
         self.label_1.setText(f"{self.current_frame}/{self.n_frames}")
-        # self.removed_label.setText(f"Removed: {self.already_deorbited}")
 
         otv_screen_pos = self.get_object_screen_pos(self.otv_node)
         if otv_screen_pos is not None:
@@ -704,7 +683,6 @@ class RenderEngine(ShowBase):
                 self.angle_around_origin -= (
                     current_mouse_x - self.last_mouse_x
                 ) * self.rotation_speed
-                # self.light_angle_around_origin += (current_mouse_x - self.last_mouse_x) * self.rotation_speed
 
             # Check if the mouse has moved vertically
             if current_mouse_y != self.last_mouse_y:
@@ -715,9 +693,6 @@ class RenderEngine(ShowBase):
                 self.elevation_angle = max(
                     -90, min(90, self.elevation_angle)
                 )  # Clamp the elevation angle
-
-                # self.light_elevation_angle -= (current_mouse_y - self.last_mouse_y) * self.elevation_speed
-                # self.light_elevation_angle = max(-90, min(90, self.light_elevation_angle))
 
             self.update_camera_position()
 
@@ -731,9 +706,6 @@ class RenderEngine(ShowBase):
             return task.done
 
     def update_camera_position(self):
-        # print(f'\r{self.angle_around_origin} , {self.elevation_angle}' , end='')
-        # print(f'\r{self.camera.getPos()} , {self.angle_around_origin} , {self.elevation_angle}' , end='')
-
         # Camera
         if self.angle_around_origin > 360:
             self.angle_around_origin -= 360
@@ -791,13 +763,18 @@ class RenderEngine(ShowBase):
         return sphere
 
     def add_text_label(
-        self, text="PlaceHolder", pos=(-1, 1), scale=0.06, alignment_mode=TextNode.ALeft
+        self,
+        text="PlaceHolder",
+        pos=(-1, 1),
+        scale=0.06,
+        alignment_mode=TextNode.ALeft,
+        fg=(1, 1, 1, 1),
     ):
         text_label = OnscreenText(
             text=text,
             pos=pos,  # Position on the screen
             scale=scale,  # Text scale
-            fg=(1, 1, 1, 1),  # Text color (R, G, B, A)
+            fg=fg,  # Text color (R, G, B, A)
             bg=(0, 0, 0, 0),  # Background color (R, G, B, A)
             align=alignment_mode,  # Text alignment
             mayChange=True,
@@ -839,9 +816,6 @@ class RenderEngine(ShowBase):
 
     def on_d_pressed(self):
         self.diagram_value = 1 - self.diagram_value
-        # if self.diagram_value == 1:
-        #     self.atmosphere_value = 0
-        #     self.cloud_value = 0
         self.toggle_skybox()
 
         if self.diagram_value == 1:

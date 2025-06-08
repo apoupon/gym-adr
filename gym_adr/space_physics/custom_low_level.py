@@ -1,10 +1,9 @@
-"""Low level maneuver implementations"""
+# Low level maneuver implementations
 
 import numpy as np
 from numba import njit as jit
 from numpy import cross
 
-# from poliastro._math.linalg import norm # _math ??
 from poliastro.core.elements import coe_rotation_matrix, rv2coe, rv_pqw
 
 
@@ -41,7 +40,7 @@ def hohmann_any_angle(k, rv, r_f):
 
     """
     _, ecc, inc, raan, argp, nu = rv2coe(k, *rv)
-    h_i = np.linalg.norm(cross(*rv))  # poliastro._math.linalg or np.linalg ?
+    h_i = np.linalg.norm(cross(*rv))
     p_i = h_i**2 / k
 
     r_i, v_i = rv_pqw(k, p_i, ecc, nu)

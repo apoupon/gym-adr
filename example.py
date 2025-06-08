@@ -1,15 +1,15 @@
-# import gymnasium as gym
+import gymnasium as gym
 import wandb
-from gym_adr.adr import ADREnv  # import gym_adr
+import gym_adr
 
 if __name__ == "__main__":
     wandb.login()
     run = wandb.init(project="gym-adr")
 
-    env = ADREnv()  # gym.make("gym_adr/ADR-v0", render_mode="human")
+    env = gym.make("gym_adr/ADR-v0", render_mode="human")
     observation, info = env.reset()
 
-    for _ in range(201):
+    for _ in range(1001):
         print("iteration ", _)
         action = env.action_space.sample()
         observation, reward, terminated, truncated, info = env.step(action)

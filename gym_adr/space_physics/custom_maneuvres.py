@@ -1,6 +1,5 @@
-"""
-Custom Orbital maneuvers.
-"""
+# Custom Orbital maneuvers.
+
 
 import numpy as np
 from astropy import units as u

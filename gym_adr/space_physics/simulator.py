@@ -10,9 +10,6 @@ from gym_adr.space_physics.custom_orbit import Orbit
 import gym_adr.space_physics.custom_maneuvres as custom_maneuvres
 
 
-DEBUG = False
-
-
 class Debris:
     def __init__(self, poliastro_orbit, norad_id):
         self.poliastro_orbit = poliastro_orbit
@@ -22,28 +19,12 @@ class Debris:
 class Simulator:
     def __init__(
         self,
-        render=False,
         starting_index: int = 0,
         n_debris: int = 10,
         starting_fuel: float = 1000.0,
     ):
         # Initialise the debris dictionary and assign the otv to an Orbit
         self.debris_list = self.init_random_debris(n=n_debris)
-        # self.debris_list = self.debris_from_dataset(n=n_debris) #le dataset contient 320 debris
-
-        if DEBUG:
-            for idx, target_debris in enumerate(self.debris_list):
-                print("Debris ", idx)
-                target_debris = target_debris.poliastro_orbit
-                print(
-                    target_debris.a,
-                    target_debris.ecc,
-                    target_debris.inc,
-                    target_debris.raan,
-                    target_debris.argp,
-                    target_debris.nu,
-                )
-            print("Starting index: ", starting_index)
 
         self.otv_orbit = copy.copy(self.debris_list[starting_index].poliastro_orbit)
         self.current_fuel = starting_fuel
@@ -183,8 +164,6 @@ class Simulator:
         Output:
             list (norad_id , Orbit)
         """
-        np.random.seed(42)  ################### see how to deal with random seed
-
         debris_list = []
 
         for norad_id in range(n):

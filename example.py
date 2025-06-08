@@ -1,6 +1,7 @@
 import gymnasium as gym
 import wandb
-import gym_adr
+
+import gym_adr # noqa: F401
 
 if __name__ == "__main__":
     wandb.login()

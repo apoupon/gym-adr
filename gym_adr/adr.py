@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 import gymnasium as gym
 from astropy import units as u
+import multiprocessing
 
 from gym_adr.space_physics.simulator import Simulator
-from gym_adr.utils import start_render_engine_in_subprocess
 
 
 DEBUG = True
@@ -145,7 +145,7 @@ class ADREnv(gym.Env):
 
         self.deorbited_debris.append(action)
 
-        reward = self.compute_reward(action, terminated)
+        reward = self._compute_reward(action, terminated)
 
         self.transition_function(action=action, cv=cv, dt_min=dt_min)
 
@@ -204,11 +204,8 @@ class ADREnv(gym.Env):
         self.observation_space = gym.spaces.Dict(
             {
                 # [removal_step, number_debris_left, current_removing_debris]
-                "step_and_debris": gym.spaces.MultiDiscrete(
-                    np.array(
-                        [self.total_n_debris, self.total_n_debris, self.total_n_debris],
-                        dtype=np.int64,
-                    )
+                "step_and_debris": gym.spaces.Box(
+                    low=0, high=self.total_n_debris, shape=(3,), dtype=np.int64
                 ),
                 # [dv_left, dt_left]
                 "fuel_time_constraints": gym.spaces.Box(
@@ -219,8 +216,11 @@ class ADREnv(gym.Env):
                 # [binary_flag_debris1, binary_flag_debris2...]
                 "binary_flags": gym.spaces.MultiBinary(self.total_n_debris),
                 # [priority_score_debris1, priority_score_debris2...]
-                "priority_scores": gym.spaces.MultiDiscrete(
-                    np.full(self.total_n_debris, 11, dtype=np.int64)
+                "priority_scores": gym.spaces.Box(
+                    low=0,
+                    high=self.total_n_debris + 1,
+                    shape=(self.total_n_debris,),
+                    dtype=np.int64,
                 ),
             }
         )
@@ -232,11 +232,14 @@ class ADREnv(gym.Env):
                     self.removal_step,
                     self.number_debris_left,
                     self.current_removing_debris,
-                ]
+                ],
+                dtype=np.int64,
             ),
-            "fuel_time_constraints": np.array([self.dv_left, self.dt_left]),
-            "binary_flags": np.array(self.binary_flags),
-            "priority_scores": np.array(self.priority_scores),
+            "fuel_time_constraints": np.array(
+                [self.dv_left, self.dt_left], dtype=np.float64
+            ),
+            "binary_flags": np.array(self.binary_flags, dtype=np.int8),
+            "priority_scores": np.array(self.priority_scores, dtype=np.int64),
         }
 
     def _set_state(self, state: List[Union[int, float]]):
@@ -255,7 +258,7 @@ class ADREnv(gym.Env):
 
         return info
 
-    def compute_reward(self, action: np.int64, terminated: bool):
+    def _compute_reward(self, action: np.int64, terminated: bool):
         # Calculate reward using the priority list
         reward = self.priority_scores[action]
 
@@ -274,9 +277,9 @@ class ADREnv(gym.Env):
         # 3rd check: is the next debris still in orbit or not anymore ?
         if (self.dt_left * u.day - dt_min) < 0:
             print("Time limit reached, no more time left to deorbit debris.")
-        if (self.dv_left * (u.km / u.s) - cv) < 0:
+        elif (self.dv_left * (u.km / u.s) - cv) < 0:
             print("Fuel limit reached, no more fuel left to deorbit debris.")
-        if self.binary_flags[next_debris_index] == 1:
+        elif self.binary_flags[next_debris_index] == 1:
             print("Next debris already deorbited, cannot deorbit it again.")
 
         if (
@@ -359,3 +362,16 @@ class ADREnv(gym.Env):
 
     def close(self):
         pass
+
+
+def run_render_engine(df, fps: int):
+    from gym_adr.rendering.rendering import RenderEngine
+
+    renderEngine = RenderEngine(df, fps)
+    renderEngine.run()
+
+
+def start_render_engine_in_subprocess(df, fps: int):
+    process = multiprocessing.Process(target=run_render_engine, args=(df, fps))
+    process.start()
+    return process

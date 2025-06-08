@@ -83,15 +83,16 @@ class ADREnv(gym.Env):
 
     metadata = {
         "render_modes": ["human"],
+        "render_fps": 30
     }
 
     def __init__(
         self,
         render_mode=None,
         total_n_debris: int = 10,
-        dv_max_per_mission: int = 5,
-        dt_max_per_mission: int = 100,
-        dt_max_per_transfer: int = 30,
+        dv_max_per_mission: float = 5.0,
+        dt_max_per_mission: float = 100.0,
+        dt_max_per_transfer: int = 30.0,
         random_first_debris: bool = True,
         first_debris: Optional[int] = 3,
     ):
@@ -156,11 +157,14 @@ class ADREnv(gym.Env):
         observation = self.get_obs()
         info = self.get_info()
 
+        print('observation : ', observation)
+
         return observation, reward, terminated, False, info
 
     def reset(self, seed=None, options=None):
         print("\n -----  RESET ENV -----")
         super().reset(seed=seed)
+        random.seed(seed)
         self._setup()  # à voir quand on s'occupe du rendering
 
         if self.random_first_debris:
@@ -192,8 +196,11 @@ class ADREnv(gym.Env):
         self._set_state(state)
 
         observation = self.get_obs()
-        print("observation : ", observation)
         info = self.get_info()
+
+        # if DEBUG:
+        #     print("observation : ", observation)
+        #     print("info : ", info)
 
         return observation, info
 
@@ -209,17 +216,17 @@ class ADREnv(gym.Env):
                 ),
                 # [dv_left, dt_left]
                 "fuel_time_constraints": gym.spaces.Box(
-                    low=np.array([0, 0]),
+                    low=np.array([0.0, 0.0]),
                     high=np.array([self.dv_max_per_mission, self.dt_max_per_mission]),
                     dtype=np.float64,
                 ),
                 # [binary_flag_debris1, binary_flag_debris2...]
                 "binary_flags": gym.spaces.MultiBinary(
-                    np.full(self.total_n_debris, 1, dtype=np.int64)
+                    self.total_n_debris
                 ),
                 # [priority_score_debris1, priority_score_debris2...]
                 "priority_scores": gym.spaces.MultiDiscrete(
-                    np.full(self.total_n_debris, 10, dtype=np.int64)
+                    np.full(self.total_n_debris, 11, dtype=np.int64)
                 ),
             }
         )
@@ -331,19 +338,19 @@ class ADREnv(gym.Env):
             )
             df = pd.concat([df, transfer_frames], axis=0).reset_index(drop=True)
 
-        render_process = start_render_engine_in_subprocess(df)
+        render_process = start_render_engine_in_subprocess(df, ADREnv.metadata["render_fps"])
         render_process.join()
 
     def close(self):
         pass
 
 
-def run_render_engine(df):
-    renderEngine = RenderEngine(df)
+def run_render_engine(df, fps):
+    renderEngine = RenderEngine(df, fps)
     renderEngine.run()
 
 
-def start_render_engine_in_subprocess(df):
-    process = multiprocessing.Process(target=run_render_engine, args=(df,))
+def start_render_engine_in_subprocess(df, fps):
+    process = multiprocessing.Process(target=run_render_engine, args=(df, fps))
     process.start()
     return process

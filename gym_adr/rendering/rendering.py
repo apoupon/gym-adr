@@ -7,6 +7,7 @@ from panda3d.core import Vec3, KeyboardButton, TextureStage, TransparencyAttrib
 from panda3d.core import LightAttrib, CardMaker, NodePath, TextNode
 from panda3d.core import AntialiasAttrib, Point2, Shader
 from panda3d.core import Texture, GraphicsPipe, FrameBufferProperties, GraphicsOutput
+from panda3d.core import ClockObject
 
 from direct.showbase.ShowBase import ShowBase
 from direct.task import Task
@@ -27,7 +28,7 @@ loadPrcFileData("", f"win-size {window_width} {window_height}")
 
 
 class RenderEngine(ShowBase):
-    def __init__(self, df):
+    def __init__(self, df, fps=10):
         ShowBase.__init__(self)
         self.anti_antialiasing(is_on=True)
 
@@ -58,7 +59,10 @@ class RenderEngine(ShowBase):
 
         self.accept("x", self.userExit)
 
-        self.taskMgr.doMethodLater(1 / 30, self.renderer, "renderer")
+        self.taskMgr.doMethodLater(1 / fps, self.renderer, "renderer")
+        globalClock = ClockObject.getGlobalClock()
+        globalClock.setMode(ClockObject.MLimited)
+        globalClock.setFrameRate(fps)
 
     def toggle_fullscreen(self):
         wp = WindowProperties()

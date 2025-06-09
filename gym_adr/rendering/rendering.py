@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 from panda3d.core import Point3, MouseButton, PointLight, Mat4
 from panda3d.core import Vec3, KeyboardButton, TextureStage, TransparencyAttrib
@@ -28,7 +29,9 @@ loadPrcFileData("", f"win-size {window_width} {window_height}")
 
 
 class RenderEngine(ShowBase):
-    def __init__(self, df, fps=10):
+
+    def __init__(self, df: pd.DataFrame, fps: int = 30):
+        """Initialize the rendering engine."""
         ShowBase.__init__(self)
         self.anti_antialiasing(is_on=True)
 
@@ -65,6 +68,7 @@ class RenderEngine(ShowBase):
         globalClock.setFrameRate(fps)
 
     def toggle_fullscreen(self):
+        """Toggle between fullscreen and windowed mode."""
         wp = WindowProperties()
         if self.fullscreen:
             # Switch to windowed mode
@@ -78,6 +82,7 @@ class RenderEngine(ShowBase):
         self.win.requestProperties(wp)
 
     def setup_scene(self):
+        """Setup the scene."""
         self.skybox = setup_skybox(self.render, self.loader)
         self.setup_camera()
 
@@ -257,15 +262,13 @@ class RenderEngine(ShowBase):
 
         self.line_manager = LineManager(self.render)
 
-        self.setup_planes_visualisation()
-
     def update_trail(
         self,
-        name_in_df,
-        name_in_line_manager,
-        n_points=100,
-        color=(0, 1, 1, 1),
-        thickness=0.5,
+        name_in_df: str,
+        name_in_line_manager: str,
+        n_points: int = 20,
+        color: tuple = (0, 1, 1, 1),
+        thickness: float = 0.5,
     ):
         if self.full_traj_is_computed == 6:
             return
@@ -280,7 +283,7 @@ class RenderEngine(ShowBase):
             current_frame = self.n_frames
 
         all_points = []
-        for i in range(frame_minus_n_points, current_frame, 10):
+        for i in range(frame_minus_n_points, current_frame, 1):
             pos = tuple(self.data.iloc[i][name_in_df])
             all_points.append(pos)
 
@@ -412,6 +415,7 @@ class RenderEngine(ShowBase):
             self.quad.setShaderInput("uInverseViewMatrix", view_matrix)
 
     def setup_lights(self):
+        """Setup the lights."""
         # Add a light
         plight = PointLight("plight")
         plight.setColor((1, 1, 1, 1))
@@ -447,6 +451,7 @@ class RenderEngine(ShowBase):
         )
 
     def setup_camera(self):
+        """Setup the camera."""
         self.disableMouse()  # Enable mouse control for the camera
 
         self.rotation_speed = 50.0
@@ -473,60 +478,8 @@ class RenderEngine(ShowBase):
 
         self.taskMgr.add(self.update_camera_task, "update_camera_task")
 
-    def setup_planes_visualisation(self):
-        # Axis planes
-        s = (4, 4)
-        c = (0, 0.51, 0.71, 0.3)
-        self.visualisation_plane_1 = self.create_plane(
-            size=s, position=(0, 0, 0), rotation=(90, 0, 0), color=c
-        )
-        self.visualisation_plane_2 = self.create_plane(
-            size=s, position=(0, 0, 0), rotation=(0, 90, 0), color=c
-        )
-        self.visualisation_plane_3 = self.create_plane(
-            size=s, position=(0, 0, 0), rotation=(0, 0, 90), color=c
-        )
-
-        self.visualisation_plane_1.hide()
-        self.visualisation_plane_2.hide()
-        self.visualisation_plane_3.hide()
-
-        self.visualisation_plane_1.setAttrib(LightAttrib.makeAllOff())
-        self.visualisation_plane_2.setAttrib(LightAttrib.makeAllOff())
-        self.visualisation_plane_3.setAttrib(LightAttrib.makeAllOff())
-
-        self.visualisation_plane_is_on = False
-
-    def toggle_plane_visualisation(self):
-        self.visualisation_plane_is_on = not self.visualisation_plane_is_on
-
-        if self.visualisation_plane_is_on:
-            self.visualisation_plane_1.show()
-            self.visualisation_plane_2.show()
-            self.visualisation_plane_3.show()
-        else:
-            self.visualisation_plane_1.hide()
-            self.visualisation_plane_2.hide()
-            self.visualisation_plane_3.hide()
-
-    def create_plane(self, size, position, rotation, color=(1, 1, 1, 1)):
-        card_maker = CardMaker("plane")
-        w, h = size
-        card_maker.setFrame(-w / 2, w / 2, -h / 2, h / 2)  # Set the size of the plane
-        plane_np = NodePath(card_maker.generate())
-        plane_np.reparentTo(self.render)
-        plane_np.setPos(position)  # Set position
-        plane_np.setHpr(rotation)  # Set rotation
-
-        # Set color and alpha
-        r, g, b, a = color  # Unpack the color tuple
-        plane_np.setColor(r, g, b, a)  # Apply color and alpha
-        plane_np.setTwoSided(True)
-        plane_np.setTransparency(TransparencyAttrib.MAlpha)
-
-        return plane_np
-
     def setup_hud(self):
+        """Setup the HUD."""
         self.all_labels = []
 
         y_st = 0.9
@@ -635,6 +588,7 @@ class RenderEngine(ShowBase):
         self.all_labels.append(controls_label_9)
 
     def update_hud(self):
+        """Update the HUD labels."""
         self.label_1.setText(f"{self.current_frame}/{self.n_frames}")
 
         otv_screen_pos = self.get_object_screen_pos(self.otv_node)
@@ -659,6 +613,7 @@ class RenderEngine(ShowBase):
                     self.debris_labels[i - 1].setText(f"Debris {i}")
 
     def mouse_click(self):
+        """Handle mouse click to enable camera rotation."""
         # Check if the left mouse button is down
         if self.mouseWatcherNode.isButtonDown(MouseButton.one()):
             # Enable mouse motion task
@@ -667,6 +622,7 @@ class RenderEngine(ShowBase):
             self.taskMgr.add(self.update_camera_task, "update_camera_task")
 
     def update_camera_task(self, task):
+        """Update the camera position based on mouse movement."""
         # Check if the left mouse button is still down
         if self.mouseWatcherNode.isButtonDown(MouseButton.one()):
             # Get the mouse position
@@ -706,6 +662,7 @@ class RenderEngine(ShowBase):
             return task.done
 
     def update_camera_position(self):
+        """Update the camera position."""
         # Camera
         if self.angle_around_origin > 360:
             self.angle_around_origin -= 360
@@ -726,7 +683,7 @@ class RenderEngine(ShowBase):
         self.camera.lookAt(Point3(0, 0, 0))
 
     def check_keys(self, task):
-        # Check if the key is down
+        """Check if the key is down."""
         if self.mouseWatcherNode.is_button_down(KeyboardButton.up()):
             self.move_forward()
         if self.mouseWatcherNode.is_button_down(KeyboardButton.down()):
@@ -741,16 +698,24 @@ class RenderEngine(ShowBase):
         return task.cont
 
     def move_forward(self):
+        """Move the camera forward."""
         if self.distance_to_origin > self.min_dist:
             self.distance_to_origin -= self.distance_speed
             self.update_camera_position()
 
     def move_backward(self):
+        """Move the camera backward."""
         if self.distance_to_origin < self.max_dist:
             self.distance_to_origin += self.distance_speed
             self.update_camera_position()
 
-    def make_sphere(self, size=1, low_poly=False, otv=False, sat=False):
+    def make_sphere(
+        self,
+        size: float = 1,
+        low_poly: bool = False,
+        otv: bool = False,
+        sat: bool = False,
+    ):
         path = "gym_adr/assets/models/sphere5.obj"
         if low_poly:
             path = "gym_adr/assets/models/low_poly_sphere.obj"
@@ -764,12 +729,13 @@ class RenderEngine(ShowBase):
 
     def add_text_label(
         self,
-        text="PlaceHolder",
-        pos=(-1, 1),
-        scale=0.06,
+        text: str = "PlaceHolder",
+        pos: tuple = (-1, 1),
+        scale: float = 0.06,
         alignment_mode=TextNode.ALeft,
-        fg=(1, 1, 1, 1),
+        fg: tuple = (1, 1, 1, 1),
     ):
+        """Add a text label to the HUD."""
         text_label = OnscreenText(
             text=text,
             pos=pos,  # Position on the screen
@@ -781,23 +747,8 @@ class RenderEngine(ShowBase):
         )  # Allow text to change dynamically
         return text_label
 
-    def add_image(self, image_path, pos=(0, 0), scale=1, parent=None):
-        if parent is None:
-            parent = self.render2d  # Use self.render2d if no parent is specified.
-        pos = (pos[0], 0, pos[1])  # Convert 2D position to 3D position
-
-        scale = (scale / self.getAspectRatio(), 1, scale)
-
-        img = OnscreenImage(image=image_path, pos=pos, scale=scale, parent=parent)
-        img.setTransparency(TransparencyAttrib.MAlpha)
-        return img
-
-    def update_image_scale(self, image, scale):
-        aspect_ratio = self.getAspectRatio()
-        scale = (scale / aspect_ratio, 1, scale)
-        image.setScale(scale)
-
     def on_a_pressed(self):
+        """Toggle atmosphere."""
         self.atmosphere_value = 1 - self.atmosphere_value
 
         if self.atmosphere_value == 1:
@@ -805,6 +756,7 @@ class RenderEngine(ShowBase):
             self.show_skybox()
 
     def on_h_pressed(self):
+        """Toggle HUD visibility."""
         self.hud_value = 1 - self.hud_value
 
         if self.hud_value == 1:
@@ -815,6 +767,7 @@ class RenderEngine(ShowBase):
                 label.hide()
 
     def on_d_pressed(self):
+        """Toggle diagram mode."""
         self.diagram_value = 1 - self.diagram_value
         self.toggle_skybox()
 
@@ -829,6 +782,7 @@ class RenderEngine(ShowBase):
                 label.fg = (1, 1, 1, 1)
 
     def toggle_skybox(self):
+        """Toggle the skybox visibility."""
         self.skybox_value = 1 - self.skybox_value
 
         if self.skybox_value == 1:
@@ -837,22 +791,26 @@ class RenderEngine(ShowBase):
             self.hide_skybox()
 
     def show_skybox(self):
+        """Show the skybox."""
         self.skybox_value = 1
         for plane in self.skybox:
             plane.show()
 
     def hide_skybox(self):
+        """Hide the skybox."""
         self.skybox_value = 0
         for plane in self.skybox:
             plane.hide()
 
     def on_f_pressed(self):
+        """Toggle full trajectory value."""
         self.full_trajectory_value = 1 - self.full_trajectory_value
 
         if self.full_trajectory_value == 0:
             self.full_traj_is_computed = 0
 
     def on_space_pressed(self):
+        """Toggle pause state"""
         self.game_is_paused = not self.game_is_paused
 
         if self.game_is_paused:
@@ -861,16 +819,17 @@ class RenderEngine(ShowBase):
             self.pause_label.hide()
 
     def on_c_pressed(self):
-        # change cloud value between 0 and 1
+        """Change cloud value between 0 and 1."""
         self.cloud_value = 1 - self.cloud_value
 
     def anti_antialiasing(self, is_on):
+        """Enable anti-aliasing."""
         if is_on:
             loadPrcFileData("", "multisamples 4")  # Enable MSAA
             self.render.setAntialias(AntialiasAttrib.MAuto)
 
     def get_object_screen_pos(self, obj):
-        # Get the object's position relative to the camera
+        """Get the object's position relative to the camera and project it to 2D screen coordinates."""
         pos3d = self.camera.getRelativePoint(obj, Point3(0, 0, 0))
 
         # Project the 3D point to 2D screen coordinates

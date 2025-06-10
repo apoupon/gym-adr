@@ -66,6 +66,7 @@ class RenderEngine(ShowBase):
         globalClock = ClockObject.getGlobalClock()
         globalClock.setMode(ClockObject.MLimited)
         globalClock.setFrameRate(fps)
+        ShowBase.setFrameRateMeter(self, True)
 
     def toggle_fullscreen(self):
         """Toggle between fullscreen and windowed mode."""
@@ -283,7 +284,7 @@ class RenderEngine(ShowBase):
             current_frame = self.n_frames
 
         all_points = []
-        for i in range(frame_minus_n_points, current_frame, 1):
+        for i in range(frame_minus_n_points, current_frame, 5):
             pos = tuple(self.data.iloc[i][name_in_df])
             all_points.append(pos)
 
@@ -482,114 +483,73 @@ class RenderEngine(ShowBase):
         """Setup the HUD."""
         self.all_labels = []
 
+        # HUD Positions
         y_st = 0.9
         y_sp = 0.07
-        x_po = -1.5
-        self.label_1 = self.add_text_label(text="label 1", pos=(x_po, y_st))
-        self.all_labels.append(self.label_1)
+        left_margin = 0.05
 
         self.pause_label = self.add_text_label(text="II", pos=(0, y_st))
         self.pause_label.hide()
 
-        self.fuel_label = self.add_text_label(text="Fuel: #", pos=(x_po, y_st - y_sp))
-        self.target_label = self.add_text_label(
-            text="Target: #", pos=(x_po, y_st - 2 * y_sp)
+        # Info Labels (Top Left)
+        self.frame_label = self.add_text_label(
+            text="Current frame/Total frames",
+            pos=(left_margin, y_st),
+            alignment_mode=TextNode.ALeft,
+            parent=self.a2dLeftCenter,
         )
-        self.all_labels.append(self.fuel_label)
-        self.all_labels.append(self.target_label)
+        self.fuel_label = self.add_text_label(
+            text="Fuel: #",
+            pos=(left_margin, y_st - y_sp),
+            alignment_mode=TextNode.ALeft,
+            parent=self.a2dLeftCenter,
+        )
+        self.target_label = self.add_text_label(
+            text="Target: #",
+            pos=(left_margin, y_st - 2 * y_sp),
+            alignment_mode=TextNode.ALeft,
+            parent=self.a2dLeftCenter,
+        )
+        self.all_labels += [self.frame_label, self.fuel_label, self.target_label]
 
+        # Debris and OTV Labels (Over each debris)
         self.otv_label = self.add_text_label(
             text="OTV", pos=(0, 0), scale=0.05, fg=(0, 1, 0, 1)
         )
         self.all_labels.append(self.otv_label)
+        self.debris_labels = [
+            self.add_text_label(text=f"Debris {i}", pos=(0, 0), scale=0.05)
+            for i in range(1, self.n_debris)
+        ]
+        self.all_labels += self.debris_labels
 
-        self.debris_labels = []
-        for i in range(1, self.n_debris):
-            self.debris_labels.append(
-                self.add_text_label(text=f"Debris {i}", pos=(0, 0), scale=0.05)
+        # Control Instructions (Bottom Left)
+        control_texts = [
+            "X: Exit",
+            "Esc: Toggle Fullscreen",
+            "Up/Down: Zoom In/Out",
+            "Left/Right: Rotate Camera",
+            "C: Toggle Clouds",
+            "Space: Pause/Resume",
+            "D: Toggle diagram",
+            "A: Toggle Atmosphere",
+            "H: Toggle HUD",
+            "F: Toggle Full Trajectory",
+        ]
+
+        for i, text in enumerate(reversed(control_texts)):
+            label = self.add_text_label(
+                text=text,
+                pos=(left_margin, -0.9 + y_sp * i),
+                scale=0.04,
+                alignment_mode=TextNode.ALeft,
+                parent=self.a2dLeftCenter,
             )
-
-        self.all_labels += self.debris_labels  # add all debris labels to all labels
-
-        ctrl_x = -1.5
-        ctrl_y = -0.9
-        ctrl_scale = 0.04
-
-        controls_label_9 = self.add_text_label(
-            text="F: Toggle Full Trajectory",
-            pos=(ctrl_x, ctrl_y + y_sp * 9),
-            scale=ctrl_scale,
-            alignment_mode=TextNode.ALeft,
-        )
-        controls_label_8 = self.add_text_label(
-            text="H: Toggle HUD",
-            pos=(ctrl_x, ctrl_y + y_sp * 8),
-            scale=ctrl_scale,
-            alignment_mode=TextNode.ALeft,
-        )
-        controls_label_0 = self.add_text_label(
-            text="A: Toggle Atmosphere",
-            pos=(ctrl_x, ctrl_y + y_sp * 7),
-            scale=ctrl_scale,
-            alignment_mode=TextNode.ALeft,
-        )
-        controls_label_1 = self.add_text_label(
-            text="D: Toggle diagram",
-            pos=(ctrl_x, ctrl_y + y_sp * 6),
-            scale=ctrl_scale,
-            alignment_mode=TextNode.ALeft,
-        )
-        controls_label_2 = self.add_text_label(
-            text="Space: Pause/Resume",
-            pos=(ctrl_x, ctrl_y + y_sp * 5),
-            scale=ctrl_scale,
-            alignment_mode=TextNode.ALeft,
-        )
-        controls_label_3 = self.add_text_label(
-            text="C: Toggle Clouds",
-            pos=(ctrl_x, ctrl_y + y_sp * 4),
-            scale=ctrl_scale,
-            alignment_mode=TextNode.ALeft,
-        )
-        controls_label_4 = self.add_text_label(
-            text="Left/Right: Rotate Camera",
-            pos=(ctrl_x, ctrl_y + y_sp * 3),
-            scale=ctrl_scale,
-            alignment_mode=TextNode.ALeft,
-        )
-        controls_label_5 = self.add_text_label(
-            text="Up/Down: Zoom In/Out",
-            pos=(ctrl_x, ctrl_y + y_sp * 2),
-            scale=ctrl_scale,
-            alignment_mode=TextNode.ALeft,
-        )
-        controls_label_6 = self.add_text_label(
-            text="Esc: Toggle Fullscreen",
-            pos=(ctrl_x, ctrl_y + y_sp),
-            scale=ctrl_scale,
-            alignment_mode=TextNode.ALeft,
-        )
-        controls_label_7 = self.add_text_label(
-            text="X: Exit",
-            pos=(ctrl_x, ctrl_y),
-            scale=ctrl_scale,
-            alignment_mode=TextNode.ALeft,
-        )
-
-        self.all_labels.append(controls_label_0)
-        self.all_labels.append(controls_label_1)
-        self.all_labels.append(controls_label_2)
-        self.all_labels.append(controls_label_3)
-        self.all_labels.append(controls_label_4)
-        self.all_labels.append(controls_label_5)
-        self.all_labels.append(controls_label_6)
-        self.all_labels.append(controls_label_7)
-        self.all_labels.append(controls_label_8)
-        self.all_labels.append(controls_label_9)
+            self.all_labels.append(label)
 
     def update_hud(self):
         """Update the HUD labels."""
-        self.label_1.setText(f"{self.current_frame}/{self.n_frames}")
+        self.frame_label.setText(f"{self.current_frame}/{self.n_frames}")
 
         otv_screen_pos = self.get_object_screen_pos(self.otv_node)
         if otv_screen_pos is not None:
@@ -734,6 +694,7 @@ class RenderEngine(ShowBase):
         scale: float = 0.06,
         alignment_mode=TextNode.ALeft,
         fg: tuple = (1, 1, 1, 1),
+        parent=None,
     ):
         """Add a text label to the HUD."""
         text_label = OnscreenText(
@@ -743,8 +704,8 @@ class RenderEngine(ShowBase):
             fg=fg,  # Text color (R, G, B, A)
             bg=(0, 0, 0, 0),  # Background color (R, G, B, A)
             align=alignment_mode,  # Text alignment
-            mayChange=True,
-        )  # Allow text to change dynamically
+            parent=parent,
+        )
         return text_label
 
     def on_a_pressed(self):

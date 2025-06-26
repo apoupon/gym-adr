@@ -1,22 +1,36 @@
 import numpy as np
 import pandas as pd
+from screeninfo import get_monitors
 
-from panda3d.core import Point3, MouseButton, PointLight, Mat4
-from panda3d.core import Vec3, KeyboardButton, TextureStage, TransparencyAttrib
-from panda3d.core import LightAttrib, CardMaker, NodePath, TextNode
-from panda3d.core import AntialiasAttrib, Point2, Shader
-from panda3d.core import Texture, GraphicsPipe, FrameBufferProperties, GraphicsOutput
-from panda3d.core import ClockObject
-
+from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.ShowBase import ShowBase
 from direct.task import Task
-from direct.gui.OnscreenText import OnscreenText
-from direct.gui.OnscreenImage import OnscreenImage
 
-from screeninfo import get_monitors
-from panda3d.core import loadPrcFileData, WindowProperties
+from gym_adr.rendering.utils import LineManager, rotate_object, setup_skybox
 
-from gym_adr.rendering.utils import setup_skybox, rotate_object, LineManager
+from panda3d.core import (
+    AntialiasAttrib,
+    CardMaker,
+    ClockObject,
+    FrameBufferProperties,
+    GraphicsOutput,
+    GraphicsPipe,
+    KeyboardButton,
+    Mat4,
+    MouseButton,
+    NodePath,
+    Point2,
+    Point3,
+    PointLight,
+    Shader,
+    Texture,
+    TextureStage,
+    TextNode,
+    Vec3,
+    WindowProperties,
+    loadPrcFileData,
+)
+
 
 # Detect the screen resolution
 monitor = get_monitors()[0]
@@ -32,55 +46,61 @@ class RenderEngine(ShowBase):
 
     def __init__(self, df: pd.DataFrame, fps: int = 30):
         """Initialize the rendering engine."""
-        ShowBase.__init__(self)
+        super().__init__()
         self.anti_antialiasing(is_on=True)
 
+        # Data and state
         self.data = df
         self.current_frame = 0
-
         self.n_frames = len(self.data)
-
         row_0 = self.data.loc[self.current_frame]
-        self.n_debris = len(row_0) - 3
 
+        self.n_debris = len(row_0) - 3
         self.current_target = row_0["target_index"]
         self.already_deorbited = []
 
+        # Scene components
         self.quad = None
         self.sun = None
         self.otv_node = None
-
         self.setup_scene()
-        self.taskMgr.add(self.check_keys, "check_keys_task")
+
+        # Input handling
         self.accept("space", self.on_space_pressed)
-        self.game_is_paused = False
         self.accept("a", self.on_a_pressed)  # toggle atmosphere
         self.accept("c", self.on_c_pressed)  # toggle clouds
         self.accept("d", self.on_d_pressed)  # toggle diagram
         self.accept("f", self.on_f_pressed)  # toggle full circle trajectory
-        self.accept("h", self.on_h_pressed)  # toggle hud
-
+        self.accept("h", self.on_h_pressed)  # toggle HUD
         self.accept("x", self.userExit)
 
+        # Task scheduling
+        self.taskMgr.add(self.check_keys, "check_keys_task")
         self.taskMgr.doMethodLater(1 / fps, self.renderer, "renderer")
-        globalClock = ClockObject.getGlobalClock()
-        globalClock.setMode(ClockObject.MLimited)
-        globalClock.setFrameRate(fps)
-        ShowBase.setFrameRateMeter(self, True)
+
+        # Framerate settings
+        global_clock = ClockObject.getGlobalClock()
+        global_clock.setMode(ClockObject.MLimited)
+        global_clock.setFrameRate(fps)
+        self.setFrameRateMeter(True)
+
+        self.game_is_paused = False
 
     def toggle_fullscreen(self):
         """Toggle between fullscreen and windowed mode."""
         wp = WindowProperties()
+
         if self.fullscreen:
             # Switch to windowed mode
             wp.setFullscreen(False)
             wp.setSize(800, 600)
         else:
-            # Switch to full-screen mode
+            # Switch to fullscreen mode
             wp.setFullscreen(True)
             wp.setSize(window_width, window_height)
-        self.fullscreen = not self.fullscreen
+
         self.win.requestProperties(wp)
+        self.fullscreen = not self.fullscreen
 
     def setup_scene(self):
         """Setup the scene."""
@@ -95,28 +115,32 @@ class RenderEngine(ShowBase):
         self.load_shaders()
 
     def setup_offscreen_buffer(self):
-        # Create an offscreen buffer
-        winprops = WindowProperties.size(self.win.getXSize(), self.win.getYSize())
-        fbprops = FrameBufferProperties()
-        fbprops.setRgbColor(True)
-        fbprops.setDepthBits(1)
+        """Set up an offscreen buffer for rendering."""
+        # Configure window and framebuffer properties
+        win_size = (self.win.getXSize(), self.win.getYSize())
+        win_props = WindowProperties.size(*win_size)
+
+        fb_props = FrameBufferProperties()
+        fb_props.setRgbColor(True)
+        fb_props.setDepthBits(1)
 
         self.buffer = self.graphicsEngine.makeOutput(
             self.pipe,
             "offscreen buffer",
             -2,
-            fbprops,
-            winprops,
+            fb_props,
+            win_props,
             GraphicsPipe.BFRefuseWindow,
             self.win.getGsg(),
             self.win,
         )
 
-        # Create color and depth textures to render the scene into
+        # Create textures for color and depth
         self.color_texture = Texture()
         self.depth_texture = Texture()
         self.depth_texture.setFormat(Texture.FDepthStencil)
 
+        # Attach textures to the buffer
         self.buffer.addRenderTexture(
             self.color_texture, GraphicsOutput.RTMCopyRam, GraphicsOutput.RTPColor
         )
@@ -126,53 +150,56 @@ class RenderEngine(ShowBase):
             GraphicsOutput.RTPDepthStencil,
         )
 
-        # Set self.camera to render to the offscreen buffer
-        self.cam.node().setActive(False)  # Deactivate the main window camera
+        # Set up the offscreen rendering camera
+        self.cam.node().setActive(False)  # Deactivate the main camera
         self.buffer_cam = self.makeCamera(self.buffer, lens=self.camLens)
         self.buffer_cam.reparentTo(self.camera)
 
     def load_shaders(self):
-        # Load the shader
+        """Load post-processing shaders and configure the fullscreen quad."""
+
+        # Load GLSL shader files
         self.shader = Shader.load(
             Shader.SL_GLSL,
             "gym_adr/assets/shaders/post_process.vert",
             "gym_adr/assets/shaders/post_process.frag",
         )
 
-        # Create a fullscreen quad to apply the shader
+        # Create fullscreen quad for post-processing
         cm = CardMaker("fullscreen_quad")
         cm.setFrameFullscreenQuad()
         self.quad = self.render2d.attachNewNode(cm.generate())
         self.quad.setTexture(self.color_texture)
         self.quad.setShader(self.shader)
+
+        # Set shader inputs
+        texel_size = (1.0 / self.win.getXSize(), 1.0 / self.win.getYSize())
         self.quad.setShaderInput("tex", self.color_texture)
         self.quad.setShaderInput("depthTex", self.depth_texture)
-        self.quad.setShaderInput(
-            "texel_size", (1.0 / self.win.getXSize(), 1.0 / self.win.getYSize())
-        )
+        self.quad.setShaderInput("texel_size", texel_size)
         self.quad.setShaderInput("diagramValue", self.diagram_value)
         self.quad.setShaderInput("uCameraPosition", self.camera.getPos())
 
-        # Compute and pass inverse projection and view matrices
+        # Compute and pass inverse projection matrix
         projection_matrix = Mat4(self.camLens.getProjectionMat())
         inverse_projection_matrix = Mat4(projection_matrix)
         inverse_projection_matrix.invertInPlace()
         self.quad.setShaderInput("uInverseProjectionMatrix", inverse_projection_matrix)
 
+        # Compute and pass inverse view matrix
         view_matrix = Mat4(self.buffer_cam.getMat(self.render))
         self.quad.setShaderInput("uInverseViewMatrix", view_matrix)
 
+        # Compute atmospheric scattering coefficients
         wavelengths = [700, 530, 440]
-        scatteringStrength = 20.0
-        scatterR = (400 / wavelengths[0]) ** 4 * scatteringStrength
-        scatterG = (400 / wavelengths[1]) ** 4 * scatteringStrength
-        scatterB = (400 / wavelengths[2]) ** 4 * scatteringStrength
-        scatteringCoefficients = (scatterR, scatterG, scatterB)
-        self.quad.setShaderInput("scatteringCoefficients", scatteringCoefficients)
+        strength = 20.0
+        scattering_coeffs = tuple((400 / w) ** 4 * strength for w in wavelengths)
+        self.quad.setShaderInput("scatteringCoefficients", scattering_coeffs)
 
         self.quad.setShaderInput("atmosphereValue", self.atmosphere_value)
 
     def renderer(self, task):
+        """Main rendering task."""
         self.update_hud()
         self.update_shader_inputs()
 
@@ -183,67 +210,65 @@ class RenderEngine(ShowBase):
         return Task.cont
 
     def env_visual_update(self):
-        # Frames updates
+        """Update the environment for the current frame."""
+        # Update the frame
         current_row = self.data.loc[self.current_frame]
-
         self.current_frame += 1
+
         if self.current_frame == self.n_frames - 1:
             self.current_frame = 0
-
             for debris_node in self.debris_nodes:
                 debris_node.show()
 
             row_0 = self.data.loc[self.current_frame]
             self.current_target = row_0["target_index"]
 
-        # otv
+        # --- OTV ---
         self.update_trail("otv", "otv_trail", color=(0.3, 1, 1, 1), thickness=0.5)
-        otv_pos = np.array(current_row["otv"])
-        self.otv_node.setPos(otv_pos[0], otv_pos[1], otv_pos[2])
 
-        # otv rotation
+        otv_pos = np.array(current_row["otv"])
+        self.otv_node.setPos(*otv_pos)
+
         next_row = self.data.loc[self.current_frame + 1]
         otv_next_pos = np.array(next_row["otv"])
         otv_dir = otv_next_pos - otv_pos
-        otv_dir = otv_dir / np.linalg.norm(otv_dir)
+        otv_dir /= np.linalg.norm(otv_dir)
+
         self.otv_node.setH(np.degrees(np.arctan2(otv_dir[1], otv_dir[0])))
         self.otv_node.setP(90 + np.degrees(np.arcsin(otv_dir[2])))
         self.otv_node.setR(0)
 
-        # debris
+        # --- Debris ---
         for i in range(1, self.n_debris):
-            if i == self.current_target + 1:
-                self.update_trail(
-                    f"debris{i}", f"debris{i}_trail", color=(1, 0, 0, 1), thickness=0.5
-                )
-            else:
-                self.update_trail(
-                    f"debris{i}",
-                    f"debris{i}_trail",
-                    color=(0.2, 0.3, 0.3, 1),
-                    thickness=0.5,
-                )
-
-            # debris position
-            debris_i_pos = np.array(current_row[f"debris{i}"])
-            self.debris_nodes[i].setPos(
-                debris_i_pos[0], debris_i_pos[1], debris_i_pos[2]
+            debris_key = f"debris{i}"
+            trail_color = (
+                (1, 0, 0, 1) if i == self.current_target + 1 else (0.2, 0.3, 0.3, 1)
             )
 
-            # debris rotation
-            debris_next_pos = np.array(next_row[f"debris{i}"])
-            debris_dir = debris_next_pos - debris_i_pos
-            debris_dir = debris_dir / np.linalg.norm(debris_dir)
+            self.update_trail(
+                debris_key, f"{debris_key}_trail", color=trail_color, thickness=0.5
+            )
+
+            debris_pos = np.array(current_row[debris_key])
+            self.debris_nodes[i].setPos(*debris_pos)
+
+            debris_next_pos = np.array(next_row[debris_key])
+            debris_dir = debris_next_pos - debris_pos
+            debris_dir /= np.linalg.norm(debris_dir)
+
             self.debris_nodes[i].setH(
                 np.degrees(np.arctan2(debris_dir[1], debris_dir[0]))
             )
             self.debris_nodes[i].setP(90 + np.degrees(np.arcsin(debris_dir[2])))
             self.debris_nodes[i].setR(0)
 
+        # --- Fuel Display ---
         fuel_init = self.data["fuel"].iloc[0]
         current_fuel = current_row["fuel"]
-        self.fuel_label.setText(f"Fuel: {round(100 * (current_fuel / fuel_init))}%")
+        fuel_percentage = round(100 * (current_fuel / fuel_init))
+        self.fuel_label.setText(f"Fuel: {fuel_percentage}%")
 
+        # --- Target Update ---
         if self.current_target != current_row["target_index"]:
             if self.current_target not in self.already_deorbited:
                 self.already_deorbited.append(self.current_target)
@@ -293,31 +318,29 @@ class RenderEngine(ShowBase):
         )
 
     def make_otv(self):
+        """Create the OTV model and set its texture."""
         self.otv_node = self.loader.loadModel("gym_adr/assets/models/otv.dae")
         albedo_tex = self.loader.loadTexture("gym_adr/assets/textures/otv_albedo.png")
         self.otv_node.reparentTo(self.render)
-
         ts_albedo = TextureStage("albedo")
         self.otv_node.setTexture(ts_albedo, albedo_tex)
         self.otv_node.setScale(0.005)
 
     def make_sat(self):
+        """Create the satellite model and set its texture."""
         node = self.loader.loadModel("gym_adr/assets/models/sat.dae")
         node.reparentTo(self.render)
-
         albedo_tex = self.loader.loadTexture("gym_adr/assets/textures/sat_texture.png")
         ts_albedo = TextureStage("albedo")
         node.setTexture(ts_albedo, albedo_tex)
-
         node.setScale(0.005)
-
         return node
 
     def make_sun(self):
+        """Create the sun model and set its shader."""
         self.sun = self.make_sphere(size=0.5)
         self.sun.reparentTo(self.render)
         self.sun.setPos(0, -20, 0)
-
         self.sun.setShader(
             Shader.load(
                 Shader.SL_GLSL,
@@ -325,10 +348,10 @@ class RenderEngine(ShowBase):
                 fragment="gym_adr/assets/shaders/sun.frag",
             )
         )
-
         self.update_sun()
 
     def update_sun(self):
+        """Update the sun shader inputs."""
         # Retrieve the current model, view, and projection matrices
         model_matrix = self.sun.getMat()
         view_matrix = self.camera.getMat(self.render)
@@ -341,6 +364,7 @@ class RenderEngine(ShowBase):
         self.sun.setShaderInput("projection", projection_matrix)
 
     def make_earth(self):
+        """Create the Earth model and set its textures and shader."""
         self.earth = self.make_sphere(size=0.7)
         self.earth.reparentTo(self.render)
         self.earth.setPos(0, 0, 0)
@@ -390,6 +414,7 @@ class RenderEngine(ShowBase):
         self.update_shader_inputs()
 
     def update_shader_inputs(self):
+        """Update the shader inputs for the Earth and quad."""
         # Get camera position in world space
         view_pos = self.camera.getPos(self.render)
         self.earth.setShaderInput("viewPos", view_pos)

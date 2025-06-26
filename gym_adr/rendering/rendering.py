@@ -47,7 +47,7 @@ class RenderEngine(ShowBase):
     def __init__(self, df: pd.DataFrame, fps: int = 30):
         """Initialize the rendering engine."""
         super().__init__()
-        self.anti_antialiasing(is_on=True)
+        self.set_antialiasing(is_on=True)
 
         # Data and state
         self.data = df
@@ -75,8 +75,8 @@ class RenderEngine(ShowBase):
         self.accept("x", self.userExit)
 
         # Task scheduling
-        self.taskMgr.add(self.check_keys, "check_keys_task")
-        self.taskMgr.doMethodLater(1 / fps, self.renderer, "renderer")
+        self.taskMgr.add(self.handle_key_events, "handle_key_events_task")
+        self.taskMgr.doMethodLater(1 / fps, self.render_frame, "render_frame")
 
         # Framerate settings
         global_clock = ClockObject.getGlobalClock()
@@ -85,22 +85,6 @@ class RenderEngine(ShowBase):
         self.setFrameRateMeter(True)
 
         self.game_is_paused = False
-
-    def toggle_fullscreen(self):
-        """Toggle between fullscreen and windowed mode."""
-        wp = WindowProperties()
-
-        if self.fullscreen:
-            # Switch to windowed mode
-            wp.setFullscreen(False)
-            wp.setSize(800, 600)
-        else:
-            # Switch to fullscreen mode
-            wp.setFullscreen(True)
-            wp.setSize(window_width, window_height)
-
-        self.win.requestProperties(wp)
-        self.fullscreen = not self.fullscreen
 
     def setup_scene(self):
         """Setup the scene."""
@@ -198,247 +182,17 @@ class RenderEngine(ShowBase):
 
         self.quad.setShaderInput("atmosphereValue", self.atmosphere_value)
 
-    def renderer(self, task):
-        """Main rendering task."""
-        self.update_hud()
-        self.update_shader_inputs()
-
-        if not self.game_is_paused:
-            rotate_object(self.earth, [0.025, 0, 0])
-            self.env_visual_update()
-
-        return Task.cont
-
-    def env_visual_update(self):
-        """Update the environment for the current frame."""
-        # Update the frame
-        current_row = self.data.loc[self.current_frame]
-        self.current_frame += 1
-
-        if self.current_frame == self.n_frames - 1:
-            self.current_frame = 0
-            for debris_node in self.debris_nodes:
-                debris_node.show()
-
-            row_0 = self.data.loc[self.current_frame]
-            self.current_target = row_0["target_index"]
-
-        # --- OTV ---
-        self.update_trail("otv", "otv_trail", color=(0.3, 1, 1, 1), thickness=0.5)
-
-        otv_pos = np.array(current_row["otv"])
-        self.otv_node.setPos(*otv_pos)
-
-        next_row = self.data.loc[self.current_frame + 1]
-        otv_next_pos = np.array(next_row["otv"])
-        otv_dir = otv_next_pos - otv_pos
-        otv_dir /= np.linalg.norm(otv_dir)
-
-        self.otv_node.setH(np.degrees(np.arctan2(otv_dir[1], otv_dir[0])))
-        self.otv_node.setP(90 + np.degrees(np.arcsin(otv_dir[2])))
-        self.otv_node.setR(0)
-
-        # --- Debris ---
-        for i in range(1, self.n_debris):
-            debris_key = f"debris{i}"
-            trail_color = (
-                (1, 0, 0, 1) if i == self.current_target + 1 else (0.2, 0.3, 0.3, 1)
-            )
-
-            self.update_trail(
-                debris_key, f"{debris_key}_trail", color=trail_color, thickness=0.5
-            )
-
-            debris_pos = np.array(current_row[debris_key])
-            self.debris_nodes[i].setPos(*debris_pos)
-
-            debris_next_pos = np.array(next_row[debris_key])
-            debris_dir = debris_next_pos - debris_pos
-            debris_dir /= np.linalg.norm(debris_dir)
-
-            self.debris_nodes[i].setH(
-                np.degrees(np.arctan2(debris_dir[1], debris_dir[0]))
-            )
-            self.debris_nodes[i].setP(90 + np.degrees(np.arcsin(debris_dir[2])))
-            self.debris_nodes[i].setR(0)
-
-        # --- Fuel Display ---
-        fuel_init = self.data["fuel"].iloc[0]
-        current_fuel = current_row["fuel"]
-        fuel_percentage = round(100 * (current_fuel / fuel_init))
-        self.fuel_label.setText(f"Fuel: {fuel_percentage}%")
-
-        # --- Target Update ---
-        if self.current_target != current_row["target_index"]:
-            if self.current_target not in self.already_deorbited:
-                self.already_deorbited.append(self.current_target)
-
-        self.current_target = current_row["target_index"]
-        self.target_label.setText(f"Target: {self.current_target + 1}")
-
     def setup_nodes(self):
-        self.make_earth()
-        self.make_sun()
-        self.make_otv()
+        self.create_earth()
+        self.create_sun()
+        self.create_otv()
 
         self.debris_nodes = []
         for _ in range(self.n_debris):
-            node = self.make_sat()
+            node = self.create_satellite()
             self.debris_nodes.append(node)
 
         self.line_manager = LineManager(self.render)
-
-    def update_trail(
-        self,
-        name_in_df: str,
-        name_in_line_manager: str,
-        n_points: int = 20,
-        color: tuple = (0, 1, 1, 1),
-        thickness: float = 0.5,
-    ):
-        if self.full_traj_is_computed == 6:
-            return
-        elif self.full_trajectory_value == 1:
-            self.full_traj_is_computed += 1
-
-        current_frame = self.current_frame + 1  # last
-        frame_minus_n_points = max(0, self.current_frame - n_points)  # first
-
-        if self.full_trajectory_value == 1:
-            frame_minus_n_points = 0
-            current_frame = self.n_frames
-
-        all_points = []
-        for i in range(frame_minus_n_points, current_frame, 5):
-            pos = tuple(self.data.iloc[i][name_in_df])
-            all_points.append(pos)
-
-        self.line_manager.update_line(
-            name_in_line_manager, all_points, color=color, thickness=thickness
-        )
-
-    def make_otv(self):
-        """Create the OTV model and set its texture."""
-        self.otv_node = self.loader.loadModel("gym_adr/assets/models/otv.dae")
-        albedo_tex = self.loader.loadTexture("gym_adr/assets/textures/otv_albedo.png")
-        self.otv_node.reparentTo(self.render)
-        ts_albedo = TextureStage("albedo")
-        self.otv_node.setTexture(ts_albedo, albedo_tex)
-        self.otv_node.setScale(0.005)
-
-    def make_sat(self):
-        """Create the satellite model and set its texture."""
-        node = self.loader.loadModel("gym_adr/assets/models/sat.dae")
-        node.reparentTo(self.render)
-        albedo_tex = self.loader.loadTexture("gym_adr/assets/textures/sat_texture.png")
-        ts_albedo = TextureStage("albedo")
-        node.setTexture(ts_albedo, albedo_tex)
-        node.setScale(0.005)
-        return node
-
-    def make_sun(self):
-        """Create the sun model and set its shader."""
-        self.sun = self.make_sphere(size=0.5)
-        self.sun.reparentTo(self.render)
-        self.sun.setPos(0, -20, 0)
-        self.sun.setShader(
-            Shader.load(
-                Shader.SL_GLSL,
-                vertex="gym_adr/assets/shaders/sun.vert",
-                fragment="gym_adr/assets/shaders/sun.frag",
-            )
-        )
-        self.update_sun()
-
-    def update_sun(self):
-        """Update the sun shader inputs."""
-        # Retrieve the current model, view, and projection matrices
-        model_matrix = self.sun.getMat()
-        view_matrix = self.camera.getMat(self.render)
-        view_matrix.invert_in_place()
-        projection_matrix = self.camLens.getProjectionMat()
-
-        # Set the shader inputs
-        self.sun.setShaderInput("model", model_matrix)
-        self.sun.setShaderInput("view", view_matrix)
-        self.sun.setShaderInput("projection", projection_matrix)
-
-    def make_earth(self):
-        """Create the Earth model and set its textures and shader."""
-        self.earth = self.make_sphere(size=0.7)
-        self.earth.reparentTo(self.render)
-        self.earth.setPos(0, 0, 0)
-        self.earth.setHpr(0, 90, 0)
-
-        self.atmosphere_value = 1
-        self.cloud_value = 1
-        self.skybox_value = 1
-        self.diagram_value = 0
-        self.full_trajectory_value = 0
-        self.full_traj_is_computed = 0
-        self.hud_value = 1
-
-        albedo_tex = self.loader.loadTexture("gym_adr/assets/textures/earth_bm3.png")
-        emission_tex = self.loader.loadTexture(
-            "gym_adr/assets/textures/earth_emission.png"
-        )
-        specular_tex = self.loader.loadTexture(
-            "gym_adr/assets/textures/earth_specular.jpg"
-        )
-        cloud_tex = self.loader.loadTexture("gym_adr/assets/textures/cloud.png")
-        topography_tex = self.loader.loadTexture(
-            "gym_adr/assets/textures/earth_topography.png"
-        )
-
-        ts_albedo = TextureStage("albedo")
-        ts_emission = TextureStage("emission")
-        ts_specular = TextureStage("specular")
-        ts_cloud = TextureStage("cloud")
-        ts_topography = TextureStage("topography")
-
-        self.earth.setTexture(ts_albedo, albedo_tex)
-        self.earth.setTexture(ts_emission, emission_tex)
-        self.earth.setTexture(ts_specular, specular_tex)
-        self.earth.setTexture(ts_cloud, cloud_tex)
-        self.earth.setTexture(ts_topography, topography_tex)
-
-        self.earth.setAttrib(AntialiasAttrib.make(AntialiasAttrib.MAuto))
-        self.earth.setRenderModeFilled()
-
-        self.earth.setShaderInput("albedoMap", albedo_tex)
-        self.earth.setShaderInput("emissionMap", emission_tex)
-        self.earth.setShaderInput("specularMap", specular_tex)
-        self.earth.setShaderInput("cloudMap", cloud_tex)
-        self.earth.setShaderInput("topographyMap", topography_tex)
-
-        self.update_shader_inputs()
-
-    def update_shader_inputs(self):
-        """Update the shader inputs for the Earth and quad."""
-        # Get camera position in world space
-        view_pos = self.camera.getPos(self.render)
-        self.earth.setShaderInput("viewPos", view_pos)
-        self.earth.setShaderInput("cloudValue", self.cloud_value)
-        self.earth.setShaderInput("diagramValue", self.diagram_value)
-
-        if self.sun is not None:
-            self.update_sun()
-
-        if self.quad is not None:
-            self.quad.setShaderInput("diagramValue", self.diagram_value)
-            self.quad.setShaderInput("atmosphereValue", self.atmosphere_value)
-            self.quad.setShaderInput("uCameraPosition", self.camera.getPos())
-
-            # Compute and pass inverse projection and view matrices
-            projection_matrix = Mat4(self.camLens.getProjectionMat())
-            inverse_projection_matrix = Mat4(projection_matrix)
-            inverse_projection_matrix.invertInPlace()
-            self.quad.setShaderInput(
-                "uInverseProjectionMatrix", inverse_projection_matrix
-            )
-
-            view_matrix = Mat4(self.buffer_cam.getMat(self.render))
-            self.quad.setShaderInput("uInverseViewMatrix", view_matrix)
 
     def setup_lights(self):
         """Setup the lights."""
@@ -500,7 +254,7 @@ class RenderEngine(ShowBase):
         self.camLens.setNear(0.1)
         self.camLens.setFar(100.0)
 
-        self.accept("mouse1", self.mouse_click)
+        self.accept("mouse1", self.handle_mouse_click)
 
         self.taskMgr.add(self.update_camera_task, "update_camera_task")
 
@@ -572,6 +326,246 @@ class RenderEngine(ShowBase):
             )
             self.all_labels.append(label)
 
+    def create_otv(self):
+        """Create the OTV model and set its texture."""
+        self.otv_node = self.loader.loadModel("gym_adr/assets/models/otv.dae")
+        albedo_tex = self.loader.loadTexture("gym_adr/assets/textures/otv_albedo.png")
+        self.otv_node.reparentTo(self.render)
+        ts_albedo = TextureStage("albedo")
+        self.otv_node.setTexture(ts_albedo, albedo_tex)
+        self.otv_node.setScale(0.005)
+
+    def create_satellite(self):
+        """Create the satellite model and set its texture."""
+        node = self.loader.loadModel("gym_adr/assets/models/sat.dae")
+        node.reparentTo(self.render)
+        albedo_tex = self.loader.loadTexture("gym_adr/assets/textures/sat_texture.png")
+        ts_albedo = TextureStage("albedo")
+        node.setTexture(ts_albedo, albedo_tex)
+        node.setScale(0.005)
+        return node
+
+    def create_sun(self):
+        """Create the sun model and set its shader."""
+        self.sun = self.create_sphere(size=0.5)
+        self.sun.reparentTo(self.render)
+        self.sun.setPos(0, -20, 0)
+        self.sun.setShader(
+            Shader.load(
+                Shader.SL_GLSL,
+                vertex="gym_adr/assets/shaders/sun.vert",
+                fragment="gym_adr/assets/shaders/sun.frag",
+            )
+        )
+        self.update_sun()
+
+    def create_earth(self):
+        """Create the Earth model and set its textures and shader."""
+        self.earth = self.create_sphere(size=0.7)
+        self.earth.reparentTo(self.render)
+        self.earth.setPos(0, 0, 0)
+        self.earth.setHpr(0, 90, 0)
+
+        self.atmosphere_value = 1
+        self.cloud_value = 1
+        self.skybox_value = 1
+        self.diagram_value = 0
+        self.full_trajectory_value = 0
+        self.full_traj_is_computed = 0
+        self.hud_value = 1
+
+        albedo_tex = self.loader.loadTexture("gym_adr/assets/textures/earth_bm3.png")
+        emission_tex = self.loader.loadTexture(
+            "gym_adr/assets/textures/earth_emission.png"
+        )
+        specular_tex = self.loader.loadTexture(
+            "gym_adr/assets/textures/earth_specular.jpg"
+        )
+        cloud_tex = self.loader.loadTexture("gym_adr/assets/textures/cloud.png")
+        topography_tex = self.loader.loadTexture(
+            "gym_adr/assets/textures/earth_topography.png"
+        )
+
+        ts_albedo = TextureStage("albedo")
+        ts_emission = TextureStage("emission")
+        ts_specular = TextureStage("specular")
+        ts_cloud = TextureStage("cloud")
+        ts_topography = TextureStage("topography")
+
+        self.earth.setTexture(ts_albedo, albedo_tex)
+        self.earth.setTexture(ts_emission, emission_tex)
+        self.earth.setTexture(ts_specular, specular_tex)
+        self.earth.setTexture(ts_cloud, cloud_tex)
+        self.earth.setTexture(ts_topography, topography_tex)
+
+        self.earth.setAttrib(AntialiasAttrib.make(AntialiasAttrib.MAuto))
+        self.earth.setRenderModeFilled()
+
+        self.earth.setShaderInput("albedoMap", albedo_tex)
+        self.earth.setShaderInput("emissionMap", emission_tex)
+        self.earth.setShaderInput("specularMap", specular_tex)
+        self.earth.setShaderInput("cloudMap", cloud_tex)
+        self.earth.setShaderInput("topographyMap", topography_tex)
+
+        self.update_shader_inputs()
+
+    def create_sphere(
+        self,
+        size: float = 1,
+        low_poly: bool = False,
+        otv: bool = False,
+        sat: bool = False,
+    ):
+        path = "gym_adr/assets/models/sphere5.obj"
+        if low_poly:
+            path = "gym_adr/assets/models/low_poly_sphere.obj"
+        if otv:
+            path = "gym_adr/assets/models/otv.obj"
+        if sat:
+            path = "gym_adr/assets/models/sat.obj"
+        sphere = self.loader.loadModel(path)
+        sphere.setScale(size)
+        return sphere
+
+    def add_text_label(
+        self,
+        text: str = "PlaceHolder",
+        pos: tuple = (-1, 1),
+        scale: float = 0.06,
+        alignment_mode=TextNode.ALeft,
+        fg: tuple = (1, 1, 1, 1),
+        parent=None,
+    ):
+        """Add a text label to the HUD."""
+        text_label = OnscreenText(
+            text=text,
+            pos=pos,  # Position on the screen
+            scale=scale,  # Text scale
+            fg=fg,  # Text color (R, G, B, A)
+            bg=(0, 0, 0, 0),  # Background color (R, G, B, A)
+            align=alignment_mode,  # Text alignment
+            parent=parent,
+        )
+        return text_label
+
+    def render_frame(self, task):
+        """Main rendering task."""
+        self.update_hud()
+        self.update_shader_inputs()
+
+        if not self.game_is_paused:
+            rotate_object(self.earth, [0.025, 0, 0])
+            self.update_environment_visuals()
+
+        return Task.cont
+
+    def update_environment_visuals(self):
+        """Update the environment for the current frame."""
+        # Update the frame
+        current_row = self.data.loc[self.current_frame]
+        self.current_frame += 1
+
+        if self.current_frame == self.n_frames - 1:
+            self.current_frame = 0
+            for debris_node in self.debris_nodes:
+                debris_node.show()
+
+            row_0 = self.data.loc[self.current_frame]
+            self.current_target = row_0["target_index"]
+
+        # --- OTV ---
+        self.update_trail("otv", "otv_trail", color=(0.3, 1, 1, 1), thickness=0.5)
+
+        otv_pos = np.array(current_row["otv"])
+        self.otv_node.setPos(*otv_pos)
+
+        next_row = self.data.loc[self.current_frame + 1]
+        otv_next_pos = np.array(next_row["otv"])
+        otv_dir = otv_next_pos - otv_pos
+        otv_dir /= np.linalg.norm(otv_dir)
+
+        self.otv_node.setH(np.degrees(np.arctan2(otv_dir[1], otv_dir[0])))
+        self.otv_node.setP(90 + np.degrees(np.arcsin(otv_dir[2])))
+        self.otv_node.setR(0)
+
+        # --- Debris ---
+        for i in range(1, self.n_debris):
+            debris_key = f"debris{i}"
+            trail_color = (
+                (1, 0, 0, 1) if i == self.current_target + 1 else (0.2, 0.3, 0.3, 1)
+            )
+
+            self.update_trail(
+                debris_key, f"{debris_key}_trail", color=trail_color, thickness=0.5
+            )
+
+            debris_pos = np.array(current_row[debris_key])
+            self.debris_nodes[i].setPos(*debris_pos)
+
+            debris_next_pos = np.array(next_row[debris_key])
+            debris_dir = debris_next_pos - debris_pos
+            debris_dir /= np.linalg.norm(debris_dir)
+
+            self.debris_nodes[i].setH(
+                np.degrees(np.arctan2(debris_dir[1], debris_dir[0]))
+            )
+            self.debris_nodes[i].setP(90 + np.degrees(np.arcsin(debris_dir[2])))
+            self.debris_nodes[i].setR(0)
+
+        # --- Fuel Display ---
+        fuel_init = self.data["fuel"].iloc[0]
+        current_fuel = current_row["fuel"]
+        fuel_percentage = round(100 * (current_fuel / fuel_init))
+        self.fuel_label.setText(f"Fuel: {fuel_percentage}%")
+
+        # --- Target Update ---
+        if self.current_target != current_row["target_index"]:
+            if self.current_target not in self.already_deorbited:
+                self.already_deorbited.append(self.current_target)
+
+        self.current_target = current_row["target_index"]
+        self.target_label.setText(f"Target: {self.current_target + 1}")
+
+    def update_sun(self):
+        """Update the sun shader inputs."""
+        # Retrieve the current model, view, and projection matrices
+        model_matrix = self.sun.getMat()
+        view_matrix = self.camera.getMat(self.render)
+        view_matrix.invert_in_place()
+        projection_matrix = self.camLens.getProjectionMat()
+
+        # Set the shader inputs
+        self.sun.setShaderInput("model", model_matrix)
+        self.sun.setShaderInput("view", view_matrix)
+        self.sun.setShaderInput("projection", projection_matrix)
+
+    def update_shader_inputs(self):
+        """Update the shader inputs for the Earth and quad."""
+        # Get camera position in world space
+        view_pos = self.camera.getPos(self.render)
+        self.earth.setShaderInput("viewPos", view_pos)
+        self.earth.setShaderInput("cloudValue", self.cloud_value)
+        self.earth.setShaderInput("diagramValue", self.diagram_value)
+
+        if self.sun is not None:
+            self.update_sun()
+
+        if self.quad is not None:
+            self.quad.setShaderInput("diagramValue", self.diagram_value)
+            self.quad.setShaderInput("atmosphereValue", self.atmosphere_value)
+            self.quad.setShaderInput("uCameraPosition", self.camera.getPos())
+
+            # Compute and pass inverse projection and view matrices
+            projection_matrix = Mat4(self.camLens.getProjectionMat())
+            inverse_projection_matrix = Mat4(projection_matrix)
+            inverse_projection_matrix.invertInPlace()
+            self.quad.setShaderInput(
+                "uInverseProjectionMatrix", inverse_projection_matrix
+            )
+
+            view_matrix = Mat4(self.buffer_cam.getMat(self.render))
+            self.quad.setShaderInput("uInverseViewMatrix", view_matrix)
+
     def update_hud(self):
         """Update the HUD labels."""
         self.frame_label.setText(f"{self.current_frame}/{self.n_frames}")
@@ -597,14 +591,34 @@ class RenderEngine(ShowBase):
                 else:
                     self.debris_labels[i - 1].setText(f"Debris {i}")
 
-    def mouse_click(self):
-        """Handle mouse click to enable camera rotation."""
-        # Check if the left mouse button is down
-        if self.mouseWatcherNode.isButtonDown(MouseButton.one()):
-            # Enable mouse motion task
-            self.last_mouse_x = self.mouseWatcherNode.getMouseX()
-            self.last_mouse_y = self.mouseWatcherNode.getMouseY()
-            self.taskMgr.add(self.update_camera_task, "update_camera_task")
+    def update_trail(
+        self,
+        name_in_df: str,
+        name_in_line_manager: str,
+        n_points: int = 20,
+        color: tuple = (0, 1, 1, 1),
+        thickness: float = 0.5,
+    ):
+        if self.full_traj_is_computed == 6:
+            return
+        elif self.full_trajectory_value == 1:
+            self.full_traj_is_computed += 1
+
+        current_frame = self.current_frame + 1  # last
+        frame_minus_n_points = max(0, self.current_frame - n_points)  # first
+
+        if self.full_trajectory_value == 1:
+            frame_minus_n_points = 0
+            current_frame = self.n_frames
+
+        all_points = []
+        for i in range(frame_minus_n_points, current_frame, 5):
+            pos = tuple(self.data.iloc[i][name_in_df])
+            all_points.append(pos)
+
+        self.line_manager.update_line(
+            name_in_line_manager, all_points, color=color, thickness=thickness
+        )
 
     def update_camera_task(self, task):
         """Update the camera position based on mouse movement."""
@@ -667,7 +681,7 @@ class RenderEngine(ShowBase):
         self.camera.setPos(Vec3(x_pos, y_pos, z_pos))
         self.camera.lookAt(Point3(0, 0, 0))
 
-    def check_keys(self, task):
+    def handle_key_events(self, task):
         """Check if the key is down."""
         if self.mouseWatcherNode.is_button_down(KeyboardButton.up()):
             self.move_forward()
@@ -694,78 +708,36 @@ class RenderEngine(ShowBase):
             self.distance_to_origin += self.distance_speed
             self.update_camera_position()
 
-    def make_sphere(
-        self,
-        size: float = 1,
-        low_poly: bool = False,
-        otv: bool = False,
-        sat: bool = False,
-    ):
-        path = "gym_adr/assets/models/sphere5.obj"
-        if low_poly:
-            path = "gym_adr/assets/models/low_poly_sphere.obj"
-        if otv:
-            path = "gym_adr/assets/models/otv.obj"
-        if sat:
-            path = "gym_adr/assets/models/sat.obj"
-        sphere = self.loader.loadModel(path)
-        sphere.setScale(size)
-        return sphere
+    def handle_mouse_click(self):
+        """Handle mouse click to enable camera rotation."""
+        # Check if the left mouse button is down
+        if self.mouseWatcherNode.isButtonDown(MouseButton.one()):
+            # Enable mouse motion task
+            self.last_mouse_x = self.mouseWatcherNode.getMouseX()
+            self.last_mouse_y = self.mouseWatcherNode.getMouseY()
+            self.taskMgr.add(self.update_camera_task, "update_camera_task")
 
-    def add_text_label(
-        self,
-        text: str = "PlaceHolder",
-        pos: tuple = (-1, 1),
-        scale: float = 0.06,
-        alignment_mode=TextNode.ALeft,
-        fg: tuple = (1, 1, 1, 1),
-        parent=None,
-    ):
-        """Add a text label to the HUD."""
-        text_label = OnscreenText(
-            text=text,
-            pos=pos,  # Position on the screen
-            scale=scale,  # Text scale
-            fg=fg,  # Text color (R, G, B, A)
-            bg=(0, 0, 0, 0),  # Background color (R, G, B, A)
-            align=alignment_mode,  # Text alignment
-            parent=parent,
-        )
-        return text_label
+    def toggle_fullscreen(self):
+        """Toggle between fullscreen and windowed mode."""
+        wp = WindowProperties()
 
-    def on_a_pressed(self):
-        """Toggle atmosphere."""
-        self.atmosphere_value = 1 - self.atmosphere_value
-
-        if self.atmosphere_value == 1:
-            self.diagram_value = 0
-            self.show_skybox()
-
-    def on_h_pressed(self):
-        """Toggle HUD visibility."""
-        self.hud_value = 1 - self.hud_value
-
-        if self.hud_value == 1:
-            for label in self.all_labels:
-                label.show()
+        if self.fullscreen:
+            # Switch to windowed mode
+            wp.setFullscreen(False)
+            wp.setSize(800, 600)
         else:
-            for label in self.all_labels:
-                label.hide()
+            # Switch to fullscreen mode
+            wp.setFullscreen(True)
+            wp.setSize(window_width, window_height)
 
-    def on_d_pressed(self):
-        """Toggle diagram mode."""
-        self.diagram_value = 1 - self.diagram_value
-        self.toggle_skybox()
+        self.win.requestProperties(wp)
+        self.fullscreen = not self.fullscreen
 
-        if self.diagram_value == 1:
-            for label in self.all_labels:
-                # set text to black
-                label.fg = (0, 0, 0, 1)
-
-        elif self.diagram_value == 0:
-            for label in self.all_labels:
-                # set text to white
-                label.fg = (1, 1, 1, 1)
+    def set_antialiasing(self, is_on):
+        """Enable anti-aliasing."""
+        if is_on:
+            loadPrcFileData("", "multisamples 4")  # Enable MSAA
+            self.render.setAntialias(AntialiasAttrib.MAuto)
 
     def toggle_skybox(self):
         """Toggle the skybox visibility."""
@@ -788,13 +760,6 @@ class RenderEngine(ShowBase):
         for plane in self.skybox:
             plane.hide()
 
-    def on_f_pressed(self):
-        """Toggle full trajectory value."""
-        self.full_trajectory_value = 1 - self.full_trajectory_value
-
-        if self.full_trajectory_value == 0:
-            self.full_traj_is_computed = 0
-
     def on_space_pressed(self):
         """Toggle pause state"""
         self.game_is_paused = not self.game_is_paused
@@ -804,15 +769,50 @@ class RenderEngine(ShowBase):
         else:
             self.pause_label.hide()
 
+    def on_a_pressed(self):
+        """Toggle atmosphere."""
+        self.atmosphere_value = 1 - self.atmosphere_value
+
+        if self.atmosphere_value == 1:
+            self.diagram_value = 0
+            self.show_skybox()
+
     def on_c_pressed(self):
         """Change cloud value between 0 and 1."""
         self.cloud_value = 1 - self.cloud_value
 
-    def anti_antialiasing(self, is_on):
-        """Enable anti-aliasing."""
-        if is_on:
-            loadPrcFileData("", "multisamples 4")  # Enable MSAA
-            self.render.setAntialias(AntialiasAttrib.MAuto)
+    def on_d_pressed(self):
+        """Toggle diagram mode."""
+        self.diagram_value = 1 - self.diagram_value
+        self.toggle_skybox()
+
+        if self.diagram_value == 1:
+            for label in self.all_labels:
+                # set text to black
+                label.fg = (0, 0, 0, 1)
+
+        elif self.diagram_value == 0:
+            for label in self.all_labels:
+                # set text to white
+                label.fg = (1, 1, 1, 1)
+
+    def on_f_pressed(self):
+        """Toggle full trajectory value."""
+        self.full_trajectory_value = 1 - self.full_trajectory_value
+
+        if self.full_trajectory_value == 0:
+            self.full_traj_is_computed = 0
+
+    def on_h_pressed(self):
+        """Toggle HUD visibility."""
+        self.hud_value = 1 - self.hud_value
+
+        if self.hud_value == 1:
+            for label in self.all_labels:
+                label.show()
+        else:
+            for label in self.all_labels:
+                label.hide()
 
     def get_object_screen_pos(self, obj):
         """Get the object's position relative to the camera and project it to 2D screen coordinates."""

@@ -413,16 +413,11 @@ class RenderEngine(ShowBase):
         self,
         size: float = 1,
         low_poly: bool = False,
-        otv: bool = False,
-        sat: bool = False,
     ):
-        path = "gym_adr/assets/models/sphere5.obj"
+        """Create a sphere model."""
+        path = "gym_adr/assets/models/high_poly_sphere.obj"
         if low_poly:
             path = "gym_adr/assets/models/low_poly_sphere.obj"
-        if otv:
-            path = "gym_adr/assets/models/otv.obj"
-        if sat:
-            path = "gym_adr/assets/models/sat.obj"
         sphere = self.loader.loadModel(path)
         sphere.setScale(size)
         return sphere
@@ -599,6 +594,7 @@ class RenderEngine(ShowBase):
         color: tuple = (0, 1, 1, 1),
         thickness: float = 0.5,
     ):
+        """Update the trajectory trail for a given object."""
         if self.full_traj_is_computed == 6:
             return
         elif self.full_trajectory_value == 1:

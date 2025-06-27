@@ -15,6 +15,21 @@ from gym_adr.space_physics.in_plane_physics import delta_u
 
 # Helper functioms
 def to_mean(nu, argp):
+    """
+    Convert true anomaly and argument of perigee to mean anomaly.
+
+    Parameters
+    ----------
+    nu : astropy.units.Quantity
+        True anomaly in degrees.
+    argp : astropy.units.Quantity
+        Argument of perigee in degrees.
+
+    Returns
+    -------
+    mean : astropy.units.Quantity
+        Mean anomaly in degrees.
+    """
     # What is seen on the graph
     mean = (nu + argp) << u.deg
     if mean > 180 * u.deg:
@@ -22,9 +37,22 @@ def to_mean(nu, argp):
     return mean
 
 
-def time_to_inc_change(orbit):
+def time_to_inc_change(orbit: Orbit):
     """
-    Compute inc change thrust location and time of flight to reach
+    Compute inc change thrust location and time of flight to reach inc change location.
+    Must be done BEFORE inc change
+
+    Parameters
+    ----------
+    orbit : Orbit
+        Orbit to compute the inc change for.
+
+    Returns
+    -------
+    time : astropy.units.Quantity
+        Time to reach the inc change location.
+    thrust_location : astropy.units.Quantity
+        Location of the thrust in degrees.
     """
     # Compute location by converting nu to mean
     mean_anomaly = to_mean(orbit.nu, orbit.argp)
@@ -37,10 +65,26 @@ def time_to_inc_change(orbit):
     return time, thrust_location
 
 
-def time_to_raan_change(orbit_i, orbit_f):
+def time_to_raan_change(orbit_i: Orbit, orbit_f: Orbit):
     """
     Compute inc change thrust location and time of flight to reach raan change location
     Must be done AFTER inc change
+
+    Parameters
+    ----------
+    orbit_i : Orbit
+        Initial orbit.
+    orbit_f : Orbit
+        Final orbit.
+
+    Returns
+    -------
+    time : astropy.units.Quantity
+        Time to reach the raan change location.
+    u_final : astropy.units.Quantity
+        Final argument of latitude after the raan change.
+    theta : astropy.units.Quantity
+        Angle between the initial and final RAANs.
     """
     # Compute required values for equations
     delta_raan = (orbit_f.raan - orbit_i.raan) << u.rad
@@ -69,12 +113,21 @@ def time_to_raan_change(orbit_i, orbit_f):
 
 
 def hohmann_with_phasing(orbit_i: Orbit, orbit_f: Orbit, debug=True):
-    r"""Compute a Hohmann transfer with correct phasing to a target debris.
+    """
+    Compute a Hohmann transfer with correct phasing to a target debris.
     For circular orbits only.
 
     Parameters
     ----------
+    orbit_i : Orbit
+        Initial orbit.
+    orbit_f : Orbit
+        Final orbit.
 
+    Returns
+    -------
+    Maneuver
+        Maneuver object containing the two burns needed for the transfer.
     """
     # Downwards Hohmann
     down = False
@@ -137,12 +190,21 @@ def hohmann_with_phasing(orbit_i: Orbit, orbit_f: Orbit, debug=True):
     )
 
 
-def simple_inc_change(orbit_i: Orbit, orbit_f: Orbit, debug=True):
-    r"""Compute thrust vectors and phase time needed for an inclination change.
+def simple_inc_change(orbit_i: Orbit, orbit_f: Orbit):
+    """
+    Compute thrust vectors and phase time needed for an inclination change.
 
     Parameters
     ----------
+    orbit_i : Orbit
+        Initial orbit.
+    orbit_f : Orbit
+        Final orbit.
 
+    Returns
+    -------
+    Maneuver
+        Maneuver object containing the thrust vector and time to apply it.
     """
     # Compute thrust location
     time_to_thrust, thrust_location = time_to_inc_change(orbit_i)
@@ -187,12 +249,21 @@ def simple_inc_change(orbit_i: Orbit, orbit_f: Orbit, debug=True):
     return Maneuver((time_to_thrust.decompose(), thrust_vector.decompose()))
 
 
-def simple_raan_change(orbit_i: Orbit, orbit_f: Orbit, debug=True):
-    r"""Compute thrust vectors and phase time needed for an inclination change.
+def simple_raan_change(orbit_i: Orbit, orbit_f: Orbit):
+    """
+    Compute thrust vectors and phase time needed for an inclination change.
 
     Parameters
     ----------
+    orbit_i : Orbit
+        Initial orbit.
+    orbit_f : Orbit
+        Final orbit.
 
+    Returns
+    -------
+    Maneuver
+        Maneuver object containing the thrust vector and time to apply it.
     """
     # Compute thrust location and theta
     time_to_thrust, thrust_location, theta = time_to_raan_change(orbit_i, orbit_f)

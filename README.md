@@ -13,6 +13,11 @@ Install gym-adr:
 pip install gym-adr
 ```
 
+To run the example script, install gym-adr with the additional dependencies:
+```bash
+pip install gym-adr[example]
+```
+
 ## Quick start
 
 > [!WARNING]
@@ -76,6 +81,18 @@ a debris that has already been deorbited.
 * v0: Original version
 
 ## Contribute
+
+Contributions are welcome and greatly appreciated! 🚀
+
+### Follow our style
+
+```bash
+# install pre-commit hooks
+pre-commit install
+
+# apply style and linter checks on staged files
+pre-commit run --all-files
+```
 
 ## Citations
 ```bibtex

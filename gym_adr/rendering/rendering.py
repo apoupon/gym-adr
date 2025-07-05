@@ -7,6 +7,7 @@ from direct.showbase.ShowBase import ShowBase
 from direct.task import Task
 
 from gym_adr.rendering.utils import LineManager, rotate_object, setup_skybox
+from pathlib import Path
 
 from panda3d.core import (
     AntialiasAttrib,
@@ -47,6 +48,7 @@ class RenderEngine(ShowBase):
     def __init__(self, df: pd.DataFrame, fps: int = 30):
         """Initialize the rendering engine."""
         super().__init__()
+        self.current_file = Path(__file__).resolve()
         self.set_antialiasing(is_on=True)
 
         # Data and state
@@ -145,8 +147,8 @@ class RenderEngine(ShowBase):
         # Load GLSL shader files
         self.shader = Shader.load(
             Shader.SL_GLSL,
-            "gym_adr/assets/shaders/post_process.vert",
-            "gym_adr/assets/shaders/post_process.frag",
+            str(self.current_file.parent.parent / 'assets' / 'shaders' / 'post_process.vert'),
+            str(self.current_file.parent.parent / 'assets' / 'shaders' / 'post_process.frag'),
         )
 
         # Create fullscreen quad for post-processing
@@ -212,8 +214,8 @@ class RenderEngine(ShowBase):
         self.depthmap.setShader(
             Shader.load(
                 Shader.SL_GLSL,
-                "gym_adr/assets/shaders/shadow_v.glsl",
-                "gym_adr/assets/shaders/shadow_f.glsl",
+                str(self.current_file.parent.parent / 'assets' / 'shaders' / 'shadow_v.glsl'),
+                str(self.current_file.parent.parent / 'assets' / 'shaders' / 'shadow_f.glsl'),
             )
         )
 
@@ -225,8 +227,8 @@ class RenderEngine(ShowBase):
         self.earth.setShader(
             Shader.load(
                 Shader.SL_GLSL,
-                vertex="gym_adr/assets/shaders/pbr.vert",
-                fragment="gym_adr/assets/shaders/pbr.frag",
+                vertex=str(self.current_file.parent.parent / 'assets' / 'shaders' / 'pbr.vert'),
+                fragment=str(self.current_file.parent.parent / 'assets' / 'shaders' / 'pbr.frag'),
             )
         )
 
@@ -328,8 +330,8 @@ class RenderEngine(ShowBase):
 
     def create_otv(self):
         """Create the OTV model and set its texture."""
-        self.otv_node = self.loader.loadModel("gym_adr/assets/models/otv.dae")
-        albedo_tex = self.loader.loadTexture("gym_adr/assets/textures/otv_albedo.png")
+        self.otv_node = self.loader.loadModel(str(self.current_file.parent.parent / 'assets' / 'models' / 'otv.dae'))
+        albedo_tex = self.loader.loadTexture(str(self.current_file.parent.parent / 'assets' / 'textures' / 'otv_albedo.png'))
         self.otv_node.reparentTo(self.render)
         ts_albedo = TextureStage("albedo")
         self.otv_node.setTexture(ts_albedo, albedo_tex)
@@ -337,9 +339,9 @@ class RenderEngine(ShowBase):
 
     def create_satellite(self):
         """Create the satellite model and set its texture."""
-        node = self.loader.loadModel("gym_adr/assets/models/sat.dae")
+        node = self.loader.loadModel(str(self.current_file.parent.parent / 'assets' / 'models' / 'sat.dae'))
         node.reparentTo(self.render)
-        albedo_tex = self.loader.loadTexture("gym_adr/assets/textures/sat_texture.png")
+        albedo_tex = self.loader.loadTexture(str(self.current_file.parent.parent / 'assets' / 'textures' / 'sat_texture.png'))
         ts_albedo = TextureStage("albedo")
         node.setTexture(ts_albedo, albedo_tex)
         node.setScale(0.005)
@@ -353,8 +355,8 @@ class RenderEngine(ShowBase):
         self.sun.setShader(
             Shader.load(
                 Shader.SL_GLSL,
-                vertex="gym_adr/assets/shaders/sun.vert",
-                fragment="gym_adr/assets/shaders/sun.frag",
+                vertex=str(self.current_file.parent.parent / 'assets' / 'shaders' / 'sun.vert'),
+                fragment=str(self.current_file.parent.parent / 'assets' / 'shaders' / 'sun.frag'),
             )
         )
         self.update_sun()
@@ -374,16 +376,16 @@ class RenderEngine(ShowBase):
         self.full_traj_is_computed = 0
         self.hud_value = 1
 
-        albedo_tex = self.loader.loadTexture("gym_adr/assets/textures/earth_bm3.png")
+        albedo_tex = self.loader.loadTexture(str(self.current_file.parent.parent / 'assets' / 'textures' / 'earth_bm3.png'))
         emission_tex = self.loader.loadTexture(
-            "gym_adr/assets/textures/earth_emission.png"
+            str(self.current_file.parent.parent / 'assets' / 'textures' / 'earth_emission.png')
         )
         specular_tex = self.loader.loadTexture(
-            "gym_adr/assets/textures/earth_specular.jpg"
+            str(self.current_file.parent.parent / 'assets' / 'textures' / 'earth_specular.jpg')
         )
-        cloud_tex = self.loader.loadTexture("gym_adr/assets/textures/cloud.png")
+        cloud_tex = self.loader.loadTexture(str(self.current_file.parent.parent / 'assets' / 'textures' / 'cloud.png'))
         topography_tex = self.loader.loadTexture(
-            "gym_adr/assets/textures/earth_topography.png"
+            str(self.current_file.parent.parent / 'assets' / 'textures' / 'earth_topography.png')
         )
 
         ts_albedo = TextureStage("albedo")
@@ -415,9 +417,9 @@ class RenderEngine(ShowBase):
         low_poly: bool = False,
     ):
         """Create a sphere model."""
-        path = "gym_adr/assets/models/high_poly_sphere.obj"
+        path = str(self.current_file.parent.parent / 'assets' / 'models' / 'high_poly_sphere.obj')
         if low_poly:
-            path = "gym_adr/assets/models/low_poly_sphere.obj"
+            path = str(self.current_file.parent.parent / 'assets' / 'models' / 'low_poly_sphere.obj')
         sphere = self.loader.loadModel(path)
         sphere.setScale(size)
         return sphere

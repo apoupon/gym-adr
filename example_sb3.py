@@ -35,7 +35,7 @@ def parse_args():
     )
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
     parser.add_argument(
-        "--render", action="store_true", help="Render the environment after training"
+        "--render", action="store_false", help="Render the environment after training"
     )
     parser.add_argument(
         "--save_model", action="store_true", help="Save the trained model"

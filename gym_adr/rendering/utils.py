@@ -1,7 +1,6 @@
 import numpy as np
-
 from panda3d.core import LineSegs, NodePath, TextureStage
-
+from pathlib import Path
 
 def make_circle(radius, n_points, center=(0, 0, 0), rotation=(0, 0, 0)):
     """
@@ -126,12 +125,15 @@ def setup_skybox(render, loader):
 
     texture_list = []
     names = ["top", "bottom", "right", "left", "front", "back"]
+    
+    current_file = Path(__file__).resolve()
     for i in range(1, 7):
+        target_image = str(current_file.parent.parent / 'assets' / 'skybox' / f'{names[i - 1]}.png')
         texture_list.append(
-            loader.loadTexture(f"gym_adr/assets/skybox/{names[i - 1]}.png")
+            loader.loadTexture(target_image)
         )
 
-    path = "gym_adr/assets/models/plane.obj"
+    path = str(current_file.parent.parent / 'assets' / 'models' / 'plane.obj')
     plane_1 = loader.loadModel(path)
     plane_2 = loader.loadModel(path)
     plane_3 = loader.loadModel(path)
